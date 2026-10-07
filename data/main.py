@@ -7,369 +7,329 @@ import pandas as pd
 import synapseclient
 from dotenv import load_dotenv
 
-
-# ============================================================
-# Configuration
-# ============================================================
-
-# Put these two CSV files in the same directory as this script.
-VOICE_CSV = Path("Job-10649242714125674294653066972.csv")
-DEMOGRAPHICS_CSV = Path("Job-1124303654762487256360746899.csv")
+BASE_DIR = Path(__file__).resolve().parent
+VOICE_CSV = BASE_DIR / "Job-10649242714125674294653066972.csv"
+DEMOGRAPHICS_CSV = BASE_DIR / "Job-1124303654762487256360746899.csv"
 
 SYNAPSE_TABLE_ID = "syn5511444"
 AUDIO_COLUMN = "audio_audio.m4a"
+OUTPUT_DIR = BASE_DIR / "mPower_Audio"
+METADATA_DIR = BASE_DIR / "metadata"
 
-OUTPUT_DIR = Path(__file__).resolve().parent / "mPower_Audio"
 TARGET_PD = 5_000
 TARGET_CONTROL = 5_000
-CHUNK_SIZE = 500
+CHUNK_SIZE = 100
 RANDOM_SEED = 42
-
-# Conservative control definition:
-# professional-diagnosis == False AND no PD-related year is reported.
-#
-# Set this to False if you want to use professional-diagnosis == False
-# literally, without the additional consistency check.
 EXCLUDE_CONTRADICTORY_CONTROLS = True
 
-
-# ============================================================
-# Load metadata
-# ============================================================
 
 def load_metadata():
     if not VOICE_CSV.exists():
         raise FileNotFoundError(f"Voice CSV not found: {VOICE_CSV}")
-
     if not DEMOGRAPHICS_CSV.exists():
-        raise FileNotFoundError(
-            f"Demographics CSV not found: {DEMOGRAPHICS_CSV}"
-        )
+        raise FileNotFoundError(f"Demographics CSV not found: {DEMOGRAPHICS_CSV}")
 
     voice = pd.read_csv(VOICE_CSV)
     demo = pd.read_csv(DEMOGRAPHICS_CSV)
 
-    required_voice = {
-        "ROW_ID",
-        "healthCode",
-        AUDIO_COLUMN,
-    }
-
+    required_voice = {"ROW_ID", "healthCode", AUDIO_COLUMN}
     required_demo = {
-        "healthCode",
-        "professional-diagnosis",
-        "diagnosis-year",
-        "onset-year",
-        "medication-start-year",
+        "healthCode", "professional-diagnosis", "diagnosis-year",
+        "onset-year", "medication-start-year"
     }
 
-    missing_voice = required_voice - set(voice.columns)
-    missing_demo = required_demo - set(demo.columns)
+    missing = required_voice - set(voice.columns)
+    if missing:
+        raise ValueError(f"Voice CSV is missing columns: {sorted(missing)}")
 
-    if missing_voice:
-        raise ValueError(
-            f"Voice CSV is missing columns: {sorted(missing_voice)}"
-        )
-
-    if missing_demo:
-        raise ValueError(
-            f"Demographics CSV is missing columns: {sorted(missing_demo)}"
-        )
+    missing = required_demo - set(demo.columns)
+    if missing:
+        raise ValueError(f"Demographics CSV is missing columns: {sorted(missing)}")
 
     return voice, demo
 
 
-# ============================================================
-# Build participant-level labels
-# ============================================================
-
 def build_labels(demo):
-    # The demographics file currently has one row per healthCode.
-    # Still check this so a future CSV cannot silently duplicate recordings.
-    duplicate_health_codes = demo["healthCode"].duplicated().sum()
-
-    if duplicate_health_codes:
-        raise ValueError(
-            f"Demographics CSV contains {duplicate_health_codes} duplicate "
-            "healthCode rows. Resolve these before selecting recordings."
-        )
-
     demo = demo.copy()
 
-    # Normalize the diagnosis column to real booleans.
-    demo["professional-diagnosis"] = demo["professional-diagnosis"].map(
-        lambda x: (
-            True if str(x).strip().lower() == "true"
-            else False if str(x).strip().lower() == "false"
-            else np.nan
-        )
+    if demo["healthCode"].duplicated().any():
+        raise ValueError("Demographics CSV contains duplicate healthCode rows.")
+
+    demo["professional-diagnosis"] = (
+        demo["professional-diagnosis"]
+        .astype("string").str.strip().str.lower()
+        .map({"true": True, "false": False})
     )
 
-    # We cannot responsibly label missing diagnosis as either class.
     labeled = demo.dropna(
         subset=["healthCode", "professional-diagnosis"]
     ).copy()
 
     if EXCLUDE_CONTRADICTORY_CONTROLS:
-        # A participant saying "no professional PD diagnosis" but also
-        # supplying a PD diagnosis/onset/medication-start year is treated
-        # as ambiguous rather than automatically healthy.
         year_columns = [
-            "diagnosis-year",
-            "onset-year",
-            "medication-start-year",
+            "diagnosis-year", "onset-year", "medication-start-year"
         ]
-
         for col in year_columns:
-            labeled[col] = pd.to_numeric(
-                labeled[col], errors="coerce"
-            )
+            labeled[col] = pd.to_numeric(labeled[col], errors="coerce")
 
-        contradictory_control = (
+        contradictory = (
             (labeled["professional-diagnosis"] == False)
             & labeled[year_columns].notna().any(axis=1)
         )
-
-        labeled = labeled[~contradictory_control].copy()
+        removed = int(contradictory.sum())
+        if removed:
+            print(f"Excluding {removed:,} contradictory controls.")
+        labeled = labeled.loc[~contradictory].copy()
 
     labeled["label"] = np.where(
-        labeled["professional-diagnosis"],
-        "PD",
-        "CONTROL",
+        labeled["professional-diagnosis"], "PD", "CONTROL"
     )
-
     return labeled[["healthCode", "label"]]
 
 
-# ============================================================
-# Select 10,000 recordings
-# ============================================================
+def balanced_round_robin(group, target, rng):
+    participants = group["healthCode"].drop_duplicates().tolist()
+    rng.shuffle(participants)
+
+    by_participant = {}
+    for i, (participant, rows) in enumerate(group.groupby("healthCode", sort=False)):
+        by_participant[participant] = rows.sample(
+            frac=1, random_state=RANDOM_SEED + i
+        ).reset_index(drop=True)
+
+    selected = []
+    while len(selected) < target:
+        progress = False
+        for participant in participants:
+            rows = by_participant[participant]
+            if rows.empty:
+                continue
+            selected.append(rows.iloc[0])
+            by_participant[participant] = rows.iloc[1:]
+            progress = True
+            if len(selected) == target:
+                break
+        if not progress:
+            raise RuntimeError(f"Could not select {target:,} recordings.")
+
+    return pd.DataFrame(selected)
+
 
 def select_recordings(voice, labels):
     rng = np.random.default_rng(RANDOM_SEED)
 
-    # Only recordings with a known, usable diagnosis are eligible.
-    data = voice[
-        ["ROW_ID", "healthCode", AUDIO_COLUMN]
-    ].dropna().copy()
+    data = voice[["ROW_ID", "healthCode", AUDIO_COLUMN]].dropna().copy()
+    data["ROW_ID"] = pd.to_numeric(data["ROW_ID"], errors="raise").astype(int)
+    data[AUDIO_COLUMN] = data[AUDIO_COLUMN].astype(str).str.strip()
+    data = data[
+        (data[AUDIO_COLUMN] != "")
+        & (data[AUDIO_COLUMN].str.lower() != "nan")
+    ].copy()
 
-    data["ROW_ID"] = data["ROW_ID"].astype(int)
+    if data["ROW_ID"].duplicated().any():
+        raise ValueError("Voice CSV contains duplicate ROW_ID values.")
 
-    # Join by participant, not by recording.
-    data = data.merge(
-        labels,
-        on="healthCode",
-        how="inner",
-        validate="many_to_one",
-    )
+    data = data.merge(labels, on="healthCode", how="inner", validate="many_to_one")
 
     pd_data = data[data["label"] == "PD"].copy()
     control_data = data[data["label"] == "CONTROL"].copy()
 
-    pd_participants = pd_data["healthCode"].nunique()
-    control_participants = control_data["healthCode"].nunique()
-
-    print(f"Eligible PD participants:      {pd_participants:,}")
-    print(f"Eligible control participants: {control_participants:,}")
+    print(f"Eligible PD participants:      {pd_data['healthCode'].nunique():,}")
+    print(f"Eligible control participants: {control_data['healthCode'].nunique():,}")
     print(f"Eligible PD recordings:        {len(pd_data):,}")
     print(f"Eligible control recordings:   {len(control_data):,}")
 
-    if pd_participants == 0 or control_participants == 0:
-        raise RuntimeError("Both PD and control participants are required.")
-
     if len(pd_data) < TARGET_PD:
-        raise RuntimeError(
-            f"Only {len(pd_data):,} eligible PD recordings exist; "
-            f"{TARGET_PD:,} are required."
-        )
-
+        raise RuntimeError("Not enough eligible PD recordings.")
     if len(control_data) < TARGET_CONTROL:
-        raise RuntimeError(
-            f"Only {len(control_data):,} eligible control recordings exist; "
-            f"{TARGET_CONTROL:,} are required."
-        )
+        raise RuntimeError("Not enough eligible control recordings.")
 
-    # We deliberately maximize participant diversity.
-    #
-    # PD: 5,000 recordings / 970 participants means:
-    #      820 participants get 5 recordings
-    #      150 participants get 6 recordings
-    #
-    # Controls: 5,000 / 4,107 participants means:
-    #      3,214 participants get 1 recording
-    #        893 participants get 2 recordings
-    #
-    # The exact participant counts depend on the input metadata.
-
-    def balanced_round_robin(group, target):
-        participants = group["healthCode"].drop_duplicates().tolist()
-        rng.shuffle(participants)
-
-        by_participant = {
-            p: g.sample(frac=1, random_state=RANDOM_SEED + i)
-            for i, (p, g) in enumerate(
-                group.groupby("healthCode", sort=False)
-            )
-        }
-
-        selected_rows = []
-
-        # Round-robin guarantees that we use every participant once
-        # before giving anyone a second recording, then every participant
-        # again before a third, etc.
-        while len(selected_rows) < target:
-            made_progress = False
-
-            for participant in participants:
-                candidate = by_participant[participant]
-
-                if candidate.empty:
-                    continue
-
-                selected_rows.append(candidate.iloc[0])
-                by_participant[participant] = candidate.iloc[1:]
-                made_progress = True
-
-                if len(selected_rows) == target:
-                    break
-
-            if not made_progress:
-                raise RuntimeError(
-                    f"Could not select {target:,} recordings."
-                )
-
-        return pd.DataFrame(selected_rows)
-
-    selected_pd = balanced_round_robin(pd_data, TARGET_PD)
-    selected_control = balanced_round_robin(
-        control_data, TARGET_CONTROL
-    )
-
-    selected = pd.concat(
-        [selected_pd, selected_control],
-        ignore_index=True,
-    )
-
-    # Shuffle the final query order.
-    selected = selected.sample(
-        frac=1,
-        random_state=RANDOM_SEED,
+    selected = pd.concat([
+        balanced_round_robin(pd_data, TARGET_PD, rng),
+        balanced_round_robin(control_data, TARGET_CONTROL, rng),
+    ], ignore_index=True).sample(
+        frac=1, random_state=RANDOM_SEED
     ).reset_index(drop=True)
 
-    # Hard validation.
-    assert len(selected) == 10_000
-    assert selected["ROW_ID"].nunique() == 10_000
-    assert selected["healthCode"].isna().sum() == 0
-    assert selected["label"].value_counts()["PD"] == TARGET_PD
-    assert selected["label"].value_counts()["CONTROL"] == TARGET_CONTROL
+    if len(selected) != TARGET_PD + TARGET_CONTROL:
+        raise RuntimeError("Final recording count is incorrect.")
+    if selected["ROW_ID"].nunique() != len(selected):
+        raise RuntimeError("Duplicate ROW_ID in final selection.")
 
+    counts = selected["label"].value_counts()
+    if counts.get("PD", 0) != TARGET_PD:
+        raise RuntimeError("Final PD count is incorrect.")
+    if counts.get("CONTROL", 0) != TARGET_CONTROL:
+        raise RuntimeError("Final control count is incorrect.")
+
+    participant_counts = selected["healthCode"].value_counts()
     print("\nFinal selection:")
-    print(selected["label"].value_counts())
-    print(
-        f"Unique participants: "
-        f"{selected['healthCode'].nunique():,}"
-    )
-    print(
-        f"Maximum recordings from one participant: "
-        f"{selected['healthCode'].value_counts().max()}"
-    )
-
+    print(counts)
+    print(f"Unique participants: {selected['healthCode'].nunique():,}")
+    print(f"Maximum recordings from one participant: {participant_counts.max()}")
     return selected
 
 
-# ============================================================
-# Download from Synapse
-# ============================================================
+def save_manifest(rows, path):
+    new = pd.DataFrame(rows)
+    if path.exists():
+        old = pd.read_csv(path, dtype=str)
+        new = pd.concat([old, new], ignore_index=True)
+    new = new.drop_duplicates("ROW_ID", keep="last")
+    new["ROW_ID"] = new["ROW_ID"].astype(str)
+    new = new.sort_values("ROW_ID", key=lambda col: col.astype(str))
+    new.to_csv(path, index=False)
+
 
 def download_audio(selected):
     load_dotenv()
-
-    access_token = os.getenv("ACCESS_TOKEN")
-
-    if not access_token:
-        raise RuntimeError(
-            "ACCESS_TOKEN is not set. Put it in your .env file."
-        )
+    token = os.getenv("ACCESS_TOKEN")
+    if not token:
+        raise RuntimeError("ACCESS_TOKEN is not set in .env.")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    METADATA_DIR.mkdir(parents=True, exist_ok=True)
 
     syn = synapseclient.Synapse()
-    syn.login(authToken=access_token)
+    print("\nLogging into Synapse...")
+    syn.login(authToken=token)
 
-    row_ids = selected["ROW_ID"].astype(int).tolist()
+    selected.to_csv(METADATA_DIR / "selected_recordings.csv", index=False)
+    manifest_path = METADATA_DIR / "manifest.csv"
+    failed_path = METADATA_DIR / "failed_row_ids.txt"
 
-    print("\nStarting Synapse download...")
-    print(f"Recordings to download: {len(row_ids):,}")
-    print(f"Output directory: {OUTPUT_DIR}")
+    completed = set()
+    if manifest_path.exists():
+        manifest = pd.read_csv(manifest_path, dtype={"ROW_ID": str})
+        if "ROW_ID" in manifest.columns:
+            completed = set(manifest["ROW_ID"].astype(str))
+        print(f"Previously completed recordings: {len(completed):,}")
 
-    downloaded = 0
     failed = []
+    downloaded = 0
 
-    for start in range(0, len(row_ids), CHUNK_SIZE):
-        chunk = row_ids[start:start + CHUNK_SIZE]
-        id_list = ",".join(str(row_id) for row_id in chunk)
+    for start in range(0, len(selected), CHUNK_SIZE):
+        chunk = selected.iloc[start:start + CHUNK_SIZE].copy()
+        chunk_no = start // CHUNK_SIZE + 1
+        pending = chunk[~chunk["ROW_ID"].astype(str).isin(completed)].copy()
 
+        print(f"\nChunk {chunk_no}: {len(chunk)} recordings ({len(pending)} pending)")
+        if pending.empty:
+            continue
+
+        batch_dir = OUTPUT_DIR / f".batch_{chunk_no:04d}"
+        batch_dir.mkdir(parents=True, exist_ok=True)
+
+        row_ids = pending["ROW_ID"].astype(int).tolist()
+        row_id_sql = ",".join(map(str, row_ids))
+
+        # Do NOT put audio_audio.m4a in the SELECT list. The dot in this
+        # FILEHANDLEID column name is interpreted by Synapse SQL. The
+        # documented downloadTableColumns API receives the file column
+        # separately from the SELECT * query.
         query = (
             f"SELECT * FROM {SYNAPSE_TABLE_ID} "
-            f"WHERE ROW_ID IN ({id_list})"
-        )
-
-        print(
-            f"\nChunk {start // CHUNK_SIZE + 1}: "
-            f"{len(chunk)} recordings"
+            f"WHERE ROW_ID IN ({row_id_sql})"
         )
 
         try:
             results = syn.tableQuery(query)
-
-            downloaded_files = syn.downloadTableColumns(
+            file_map = syn.downloadTableColumns(
                 results,
                 [AUDIO_COLUMN],
+                downloadLocation=str(batch_dir),
             )
-
-            for file_path in downloaded_files.values():
-                if file_path and os.path.exists(file_path):
-                    shutil.copy2(file_path, OUTPUT_DIR)
-                    downloaded += 1
-
+        except KeyboardInterrupt:
+            shutil.rmtree(batch_dir, ignore_errors=True)
+            raise
         except Exception as exc:
-            failed.extend(chunk)
-            print(f"Chunk failed: {exc}")
+            print(f"CHUNK {chunk_no} FAILED: {type(exc).__name__}: {exc}")
+            failed.extend(row_ids)
+            shutil.rmtree(batch_dir, ignore_errors=True)
+            continue
 
-        print(f"Downloaded so far: {downloaded:,}")
+        handle_to_row = {
+            str(row[AUDIO_COLUMN]).strip(): int(row["ROW_ID"])
+            for _, row in pending.iterrows()
+        }
+
+        manifest_rows = []
+        for file_handle, downloaded_path in file_map.items():
+            file_handle = str(file_handle)
+            row_id = handle_to_row.get(file_handle)
+            if row_id is None:
+                print(f"WARNING: file handle {file_handle} not in selected metadata.")
+                continue
+
+            source = Path(downloaded_path)
+            destination = OUTPUT_DIR / f"{row_id}.m4a"
+
+            try:
+                if not source.exists():
+                    raise FileNotFoundError(f"Downloaded file does not exist: {source}")
+                if source.stat().st_size == 0:
+                    raise RuntimeError("Downloaded file is empty.")
+
+                if destination.exists():
+                    destination.unlink()
+                shutil.move(str(source), str(destination))
+
+                row = pending[pending["ROW_ID"] == row_id].iloc[0]
+                manifest_rows.append({
+                    "ROW_ID": row_id,
+                    "healthCode": row["healthCode"],
+                    "label": row["label"],
+                    "file_handle_id": file_handle,
+                    "filename": destination.name,
+                })
+                completed.add(str(row_id))
+                downloaded += 1
+            except Exception as exc:
+                print(f"FAILED ROW_ID {row_id}: {type(exc).__name__}: {exc}")
+                failed.append(row_id)
+
+        if manifest_rows:
+            save_manifest(manifest_rows, manifest_path)
+
+        shutil.rmtree(batch_dir, ignore_errors=True)
+        print(f"Downloaded this run: {downloaded:,}")
+        print(f"Failed so far: {len(set(failed)):,}")
+
+    audio_files = list(OUTPUT_DIR.glob("*.m4a"))
+    manifest_count = 0
+    if manifest_path.exists():
+        manifest_count = len(pd.read_csv(manifest_path))
+
+    failed = sorted(set(failed))
+    if failed:
+        failed_path.write_text("\n".join(map(str, failed)), encoding="utf-8")
+    elif failed_path.exists():
+        failed_path.unlink()
 
     print("\n==============================")
-    print("Download complete")
+    print("DOWNLOAD SUMMARY")
     print("==============================")
-    print(f"Requested: 10,000")
-    print(f"Downloaded: {downloaded:,}")
-    print(f"Failed:     {len(failed):,}")
-
+    print(f"Requested recordings: {len(selected):,}")
+    print(f"Downloaded this run:  {downloaded:,}")
+    print(f"Final .m4a files:     {len(audio_files):,}")
+    print(f"Manifest entries:     {manifest_count:,}")
+    print(f"Failed recordings:    {len(failed):,}")
+    print(f"Output directory:     {OUTPUT_DIR}")
     if failed:
-        failed_file = OUTPUT_DIR / "failed_row_ids.txt"
-        failed_file.write_text(
-            "\n".join(map(str, failed)),
-            encoding="utf-8",
-        )
-        print(f"Failed ROW_IDs saved to: {failed_file}")
+        print(f"Failed ROW_IDs:       {failed_path}")
+    else:
+        print("All requested recordings are present.")
 
-
-# ============================================================
-# Main
-# ============================================================
 
 def main():
     print("Loading mPower metadata...")
     voice, demo = load_metadata()
-
     print(f"Voice recordings in CSV: {len(voice):,}")
     print(f"Voice participants:       {voice['healthCode'].nunique():,}")
     print(f"Demographic participants: {demo['healthCode'].nunique():,}")
 
     labels = build_labels(demo)
-
     selected = select_recordings(voice, labels)
-
     download_audio(selected)
 
 
