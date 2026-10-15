@@ -1,0 +1,26 @@
+{
+  "standard_mean_aggregation": {
+    "accuracy": 0.7530224525043178,
+    "balanced_accuracy": 0.7667752855199468,
+    "sensitivity": 0.7945205479452054,
+    "specificity": 0.7390300230946882,
+    "f1": 0.6186666666666667,
+    "tn": 320,
+    "fp": 113,
+    "fn": 30,
+    "tp": 116
+  },
+  "clinical_top2_aggregation": {
+    "accuracy": 0.8031088082901554,
+    "balanced_accuracy": 0.8229618146730362,
+    "sensitivity": 0.863013698630137,
+    "specificity": 0.7829099307159353,
+    "f1": 0.6885245901639344,
+    "tn": 339,
+    "fp": 94,
+    "fn": 20,
+    "tp": 126
+  },
+  "total_participants": 579,
+  "total_recordings": 1480
+}

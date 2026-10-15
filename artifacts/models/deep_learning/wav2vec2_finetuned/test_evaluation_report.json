@@ -1,0 +1,67 @@
+{
+  "model_dir": "artifacts/models/deep_learning/wav2vec2_finetuned",
+  "best_epoch": 7,
+  "optimal_threshold": 0.4300000000000001,
+  "participant_level": {
+    "optimal_threshold_metrics": {
+      "accuracy": 0.5716753022452504,
+      "balanced_accuracy": 0.6750371729570692,
+      "sensitivity": 0.8835616438356164,
+      "specificity": 0.4665127020785219,
+      "f1": 0.5098814229249012,
+      "roc_auc": 0.7202537252048468,
+      "confusion_matrix": {
+        "tn": 202,
+        "fp": 231,
+        "fn": 17,
+        "tp": 129
+      }
+    },
+    "default_threshold_metrics": {
+      "accuracy": 0.616580310880829,
+      "balanced_accuracy": 0.6732813439210352,
+      "sensitivity": 0.7876712328767124,
+      "specificity": 0.558891454965358,
+      "f1": 0.5088495575221239,
+      "roc_auc": 0.7202537252048468,
+      "confusion_matrix": {
+        "tn": 242,
+        "fp": 191,
+        "fn": 31,
+        "tp": 115
+      }
+    },
+    "total_participants": 579
+  },
+  "recording_level": {
+    "optimal_threshold_metrics": {
+      "accuracy": 0.6283783783783784,
+      "balanced_accuracy": 0.6294048036465638,
+      "sensitivity": 0.8192934782608695,
+      "specificity": 0.43951612903225806,
+      "f1": 0.6867881548974943,
+      "roc_auc": 0.6830002337540908,
+      "confusion_matrix": {
+        "tn": 327,
+        "fp": 417,
+        "fn": 133,
+        "tp": 603
+      }
+    },
+    "default_threshold_metrics": {
+      "accuracy": 0.625,
+      "balanced_accuracy": 0.6256428237494156,
+      "sensitivity": 0.7445652173913043,
+      "specificity": 0.5067204301075269,
+      "f1": 0.663840096910963,
+      "roc_auc": 0.6830002337540908,
+      "confusion_matrix": {
+        "tn": 377,
+        "fp": 367,
+        "fn": 188,
+        "tp": 548
+      }
+    },
+    "total_recordings": 1480
+  }
+}

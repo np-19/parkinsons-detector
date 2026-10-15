@@ -1,0 +1,37 @@
+# Virtual environment & editor configs
+.venv/
+.env
+.vscode/
+.idea/
+
+# Large archives and packages (GitHub rejects files > 100MB)
+*.tar.gz
+*.tar
+*.zip
+*.gz
+
+# Raw and processed audio data (3.1 GB)
+data/processed_audio/
+data/train/
+data/validation/
+data/test/
+mPower_Audio/
+
+# Python caches and local tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Large model weights (keep reports & CSVs, ignore heavy binary weights)
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+
+# Local logs and temporary files
+*.log
+*.tmp
+*.part

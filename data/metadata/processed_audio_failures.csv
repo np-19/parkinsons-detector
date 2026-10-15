@@ -1,0 +1,85 @@
+ROW_ID,healthCode,label,filename,split,error
+73429,542e46b9-3437-497e-893c-2ae34052df68,CONTROL,73429.m4a,train,"[alac @ 0x557643a2d880] invalid samples per frame: 0
+[alac @ 0x557643a32d40] invalid samples per frame: 0
+[aist#0:0/alac @ 0x557643a33c80] [dec:alac @ 0x557643a304c0] Decoding error: Invalid data found when processing input
+[aist#0:0/alac @ 0x557643a33c80] [dec:alac @ 0x557643a304c0] Decode error rate 1 exceeds maximum 0.666667
+[aist#0:0/alac @ 0x557643a33c80] [dec:alac @ 0x557643a304c0] Task finished with error code: -1145393733 (Error number -1145393733 occurred)
+[aist#0:0/alac @ 0x557643a33c80] [dec:alac @ 0x557643a304c0] Terminating thread with return code -1145393733 (Error number -1145393733 occurred)"
+74344,0c0181a9-04b7-4228-a32d-774efb2b2dba,CONTROL,74344.m4a,train,"[in#0 @ 0x55e3440f9a00] moov atom not found
+[in#0 @ 0x55e3440f9700] Error opening input: Invalid data found when processing input
+Error opening input file data/mPower_Audio/train/CONTROL/74344.m4a.
+Error opening input files: Invalid data found when processing input"
+74372,0c0181a9-04b7-4228-a32d-774efb2b2dba,CONTROL,74372.m4a,train,"[in#0 @ 0x55b919226a00] moov atom not found
+[in#0 @ 0x55b919226700] Error opening input: Invalid data found when processing input
+Error opening input file data/mPower_Audio/train/CONTROL/74372.m4a.
+Error opening input files: Invalid data found when processing input"
+79826,da14e350-91b1-4ba2-b031-185402e28909,CONTROL,79826.m4a,train,"[alac @ 0x55d972406880] invalid samples per frame: 0
+[alac @ 0x55d97240bd40] invalid samples per frame: 0
+[aist#0:0/alac @ 0x55d97240cc80] [dec:alac @ 0x55d9724094c0] Decoding error: Invalid data found when processing input
+[alac @ 0x55d97241e8c0] invalid samples per frame: 0
+[aist#0:0/alac @ 0x55d97240cc80] [dec:alac @ 0x55d9724094c0] Decoding error: Invalid data found when processing input
+[aist#0:0/alac @ 0x55d97240cc80] [dec:alac @ 0x55d9724094c0] Decode error rate 1 exceeds maximum 0.666667
+[aist#0:0/alac @ 0x55d97240cc80] [dec:alac @ 0x55d9724094c0] Task finished with error code: -1145393733 (Error number -1145393733 occurred)
+[aist#0:0/alac @ 0x55d97240cc80] [dec:alac @ 0x55d9724094c0] Terminating thread with return code -1145393733 (Error number -1145393733 occurred)"
+80308,101b307e-910e-4854-9b50-f6624a0e5d67,CONTROL,80308.m4a,train,"[alac @ 0x559f66caf880] invalid samples per frame: 0
+[alac @ 0x559f66cb4d40] invalid samples per frame: 0
+[aist#0:0/alac @ 0x559f66cb5c80] [dec:alac @ 0x559f66cb24c0] Decoding error: Invalid data found when processing input
+[alac @ 0x559f66cc78c0] invalid samples per frame: 0
+[aist#0:0/alac @ 0x559f66cb5c80] [dec:alac @ 0x559f66cb24c0] Decoding error: Invalid data found when processing input
+[aist#0:0/alac @ 0x559f66cb5c80] [dec:alac @ 0x559f66cb24c0] Decode error rate 1 exceeds maximum 0.666667
+[aist#0:0/alac @ 0x559f66cb5c80] [dec:alac @ 0x559f66cb24c0] Task finished with error code: -1145393733 (Error number -1145393733 occurred)
+[aist#0:0/alac @ 0x559f66cb5c80] [dec:alac @ 0x559f66cb24c0] Terminating thread with return code -1145393733 (Error number -1145393733 occurred)"
+87295,b8a9d62f-cdec-4cee-9cfb-5572f8db2ff9,PD,87295.m4a,train,"[in#0 @ 0x555c7d378a00] moov atom not found
+[in#0 @ 0x555c7d378700] Error opening input: Invalid data found when processing input
+Error opening input file data/mPower_Audio/train/PD/87295.m4a.
+Error opening input files: Invalid data found when processing input"
+89743,d9c718b9-8137-4b93-81b7-716dd55daa91,CONTROL,89743.m4a,train,"[alac @ 0x5619b4249880] invalid samples per frame: 0
+[alac @ 0x5619b424ed40] invalid samples per frame: 0
+[aist#0:0/alac @ 0x5619b424fc80] [dec:alac @ 0x5619b424c4c0] Decoding error: Invalid data found when processing input
+[aist#0:0/alac @ 0x5619b424fc80] [dec:alac @ 0x5619b424c4c0] Decode error rate 1 exceeds maximum 0.666667
+[aist#0:0/alac @ 0x5619b424fc80] [dec:alac @ 0x5619b424c4c0] Task finished with error code: -1145393733 (Error number -1145393733 occurred)
+[aist#0:0/alac @ 0x5619b424fc80] [dec:alac @ 0x5619b424c4c0] Terminating thread with return code -1145393733 (Error number -1145393733 occurred)"
+92286,dc602b86-d63b-45d0-9ab0-962a457daccf,CONTROL,92286.m4a,train,"[in#0 @ 0x56311cdeca00] moov atom not found
+[in#0 @ 0x56311cdec700] Error opening input: Invalid data found when processing input
+Error opening input file data/mPower_Audio/train/CONTROL/92286.m4a.
+Error opening input files: Invalid data found when processing input"
+99097,cd690974-a441-45ea-8728-f873eda18840,CONTROL,99097.m4a,validation,"[alac @ 0x55bcf6419880] invalid samples per frame: 0
+[alac @ 0x55bcf641ed40] invalid samples per frame: 0
+[aist#0:0/alac @ 0x55bcf641fc80] [dec:alac @ 0x55bcf641c4c0] Decoding error: Invalid data found when processing input
+[aist#0:0/alac @ 0x55bcf641fc80] [dec:alac @ 0x55bcf641c4c0] Decode error rate 1 exceeds maximum 0.666667
+[aist#0:0/alac @ 0x55bcf641fc80] [dec:alac @ 0x55bcf641c4c0] Task finished with error code: -1145393733 (Error number -1145393733 occurred)
+[aist#0:0/alac @ 0x55bcf641fc80] [dec:alac @ 0x55bcf641c4c0] Terminating thread with return code -1145393733 (Error number -1145393733 occurred)"
+99099,cd690974-a441-45ea-8728-f873eda18840,CONTROL,99099.m4a,validation,"[alac @ 0x55c4710b5880] invalid samples per frame: 0
+[alac @ 0x55c4710bad40] invalid samples per frame: 0
+[aist#0:0/alac @ 0x55c4710bbc80] [dec:alac @ 0x55c4710b84c0] Decoding error: Invalid data found when processing input
+[aist#0:0/alac @ 0x55c4710bbc80] [dec:alac @ 0x55c4710b84c0] Decode error rate 1 exceeds maximum 0.666667
+[aist#0:0/alac @ 0x55c4710bbc80] [dec:alac @ 0x55c4710b84c0] Task finished with error code: -1145393733 (Error number -1145393733 occurred)
+[aist#0:0/alac @ 0x55c4710bbc80] [dec:alac @ 0x55c4710b84c0] Terminating thread with return code -1145393733 (Error number -1145393733 occurred)"
+72144,114fe75a-dc53-4b40-a987-0cddc76aff92,CONTROL,72144.m4a,test,"[alac @ 0x5647cb2c0880] invalid samples per frame: 0
+[alac @ 0x5647cb2c5d40] invalid samples per frame: 0
+[aist#0:0/alac @ 0x5647cb2c6c80] [dec:alac @ 0x5647cb2c34c0] Decoding error: Invalid data found when processing input
+[alac @ 0x5647cb2d88c0] invalid samples per frame: 0
+[aist#0:0/alac @ 0x5647cb2c6c80] [dec:alac @ 0x5647cb2c34c0] Decoding error: Invalid data found when processing input
+[aist#0:0/alac @ 0x5647cb2c6c80] [dec:alac @ 0x5647cb2c34c0] Decode error rate 1 exceeds maximum 0.666667
+[aist#0:0/alac @ 0x5647cb2c6c80] [dec:alac @ 0x5647cb2c34c0] Task finished with error code: -1145393733 (Error number -1145393733 occurred)
+[aist#0:0/alac @ 0x5647cb2c6c80] [dec:alac @ 0x5647cb2c34c0] Terminating thread with return code -1145393733 (Error number -1145393733 occurred)"
+72169,d006726f-099c-4551-917e-7ce3c6badef2,CONTROL,72169.m4a,test,"[alac @ 0x55d1ebc5c880] invalid samples per frame: 0
+[alac @ 0x55d1ebc61d40] invalid samples per frame: 0
+[aist#0:0/alac @ 0x55d1ebc62c80] [dec:alac @ 0x55d1ebc5f4c0] Decoding error: Invalid data found when processing input
+[alac @ 0x55d1ebc748c0] invalid samples per frame: 0
+[aist#0:0/alac @ 0x55d1ebc62c80] [dec:alac @ 0x55d1ebc5f4c0] Decoding error: Invalid data found when processing input
+[aist#0:0/alac @ 0x55d1ebc62c80] [dec:alac @ 0x55d1ebc5f4c0] Decode error rate 1 exceeds maximum 0.666667
+[aist#0:0/alac @ 0x55d1ebc62c80] [dec:alac @ 0x55d1ebc5f4c0] Task finished with error code: -1145393733 (Error number -1145393733 occurred)
+[aist#0:0/alac @ 0x55d1ebc62c80] [dec:alac @ 0x55d1ebc5f4c0] Terminating thread with return code -1145393733 (Error number -1145393733 occurred)"
+72170,d006726f-099c-4551-917e-7ce3c6badef2,CONTROL,72170.m4a,test,"[alac @ 0x55919c0d1880] invalid samples per frame: 0
+[alac @ 0x55919c0d6d40] invalid samples per frame: 0
+[aist#0:0/alac @ 0x55919c0d7c80] [dec:alac @ 0x55919c0d44c0] Decoding error: Invalid data found when processing input
+[alac @ 0x55919c0e98c0] invalid samples per frame: 0
+[aist#0:0/alac @ 0x55919c0d7c80] [dec:alac @ 0x55919c0d44c0] Decoding error: Invalid data found when processing input
+[aist#0:0/alac @ 0x55919c0d7c80] [dec:alac @ 0x55919c0d44c0] Decode error rate 1 exceeds maximum 0.666667
+[aist#0:0/alac @ 0x55919c0d7c80] [dec:alac @ 0x55919c0d44c0] Task finished with error code: -1145393733 (Error number -1145393733 occurred)
+[aist#0:0/alac @ 0x55919c0d7c80] [dec:alac @ 0x55919c0d44c0] Terminating thread with return code -1145393733 (Error number -1145393733 occurred)"
+73443,b8246adc-c450-41ca-ad9a-fffdb1354b18,CONTROL,73443.m4a,test,"[in#0 @ 0x558255adaa00] moov atom not found
+[in#0 @ 0x558255ada700] Error opening input: Invalid data found when processing input
+Error opening input file data/mPower_Audio/test/CONTROL/73443.m4a.
+Error opening input files: Invalid data found when processing input"

@@ -1,0 +1,155 @@
+services:
+  local-train:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: parkinsons-detector:latest
+    container_name: parkinsons-local-train
+    shm_size: '4gb'
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HF_HOME=/workspace/.cache/huggingface
+      - TORCH_HOME=/workspace/.cache/torch
+    volumes:
+      - ./data:/workspace/data:ro
+      - ./artifacts:/workspace/artifacts
+      - ./src:/workspace/src
+      - ./scripts:/workspace/scripts
+      - huggingface-cache:/workspace/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: >
+      python -m src.deep_learning.train
+      --data-root data/processed_audio
+      --metadata-root data/metadata
+      --output-root artifacts/models/deep_learning/wav2vec2_finetuned
+      --batch-size 4
+      --gradient-accumulation-steps 8
+      --epochs 10
+      --learning-rate 2e-5
+      --head-learning-rate 1e-4
+      --fp16
+      --gradient-checkpointing
+      --num-frozen-layers 6
+      --num-workers 2
+      --patience 4
+
+  test-benchmark:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: parkinsons-detector:latest
+    container_name: parkinsons-test-benchmark
+    shm_size: '4gb'
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HF_HOME=/workspace/.cache/huggingface
+      - TORCH_HOME=/workspace/.cache/torch
+    volumes:
+      - ./data:/workspace/data:ro
+      - ./artifacts:/workspace/artifacts
+      - ./src:/workspace/src
+      - ./scripts:/workspace/scripts
+      - huggingface-cache:/workspace/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: >
+      python -m src.deep_learning.train
+      --data-root data/processed_audio
+      --metadata-root data/metadata
+      --output-root artifacts/models/deep_learning/benchmark_test
+      --batch-size 4
+      --gradient-accumulation-steps 4
+      --epochs 1
+      --max-train-samples 100
+      --max-val-samples 30
+      --learning-rate 2e-5
+      --head-learning-rate 1e-4
+      --fp16
+      --gradient-checkpointing
+      --num-frozen-layers 6
+      --num-workers 2
+
+  cloud-train:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: parkinsons-detector:latest
+    container_name: parkinsons-cloud-train
+    shm_size: '8gb'
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HF_HOME=/workspace/.cache/huggingface
+      - TORCH_HOME=/workspace/.cache/torch
+    volumes:
+      - ./data:/workspace/data:ro
+      - ./artifacts:/workspace/artifacts
+      - ./src:/workspace/src
+      - ./scripts:/workspace/scripts
+      - huggingface-cache:/workspace/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: >
+      python -m src.deep_learning.train
+      --data-root data/processed_audio
+      --metadata-root data/metadata
+      --output-root artifacts/models/deep_learning/wav2vec2_finetuned
+      --batch-size 16
+      --gradient-accumulation-steps 2
+      --epochs 10
+      --learning-rate 2e-5
+      --head-learning-rate 1e-4
+      --fp16
+      --num-frozen-layers 6
+      --num-workers 4
+      --patience 4
+
+  evaluate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: parkinsons-detector:latest
+    container_name: parkinsons-evaluate
+    shm_size: '4gb'
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HF_HOME=/workspace/.cache/huggingface
+      - TORCH_HOME=/workspace/.cache/torch
+    volumes:
+      - ./data:/workspace/data:ro
+      - ./artifacts:/workspace/artifacts
+      - ./src:/workspace/src
+      - ./scripts:/workspace/scripts
+      - huggingface-cache:/workspace/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: >
+      python -m src.deep_learning.evaluate
+      --model-dir artifacts/models/deep_learning/wav2vec2_finetuned
+      --test-metadata data/metadata/test.csv
+      --audio-root data/processed_audio
+      --batch-size 8
+
+volumes:
+  huggingface-cache:
+

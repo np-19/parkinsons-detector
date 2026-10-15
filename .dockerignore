@@ -1,0 +1,13 @@
+# Exclude large audio datasets and caches from Docker build context
+data/processed_audio/
+data/mPower_Audio/
+artifacts/
+.cache/
+.git/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.vscode/
+

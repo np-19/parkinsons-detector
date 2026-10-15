@@ -1,0 +1,16 @@
+# Core deep learning & speech foundation models
+transformers>=4.48.0
+accelerate>=0.28.0
+
+# Audio decoding & numerical computing
+soundfile>=0.12.1
+scipy>=1.11.0
+scikit-learn>=1.4.0
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Utilities
+tqdm>=4.66.0
+python-dotenv>=1.0.0
+pytest>=8.0.0
+

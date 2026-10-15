@@ -1,0 +1,42 @@
+{
+  "config": {
+    "data_root": "data/processed_audio",
+    "metadata_root": "data/metadata",
+    "output_root": "artifacts/models/deep_learning/benchmark_test",
+    "model_name": "facebook/wav2vec2-base",
+    "batch_size": 4,
+    "gradient_accumulation_steps": 4,
+    "epochs": 1,
+    "learning_rate": 2e-05,
+    "head_learning_rate": 0.0001,
+    "weight_decay": 0.01,
+    "warmup_ratio": 0.1,
+    "duration": 5.0,
+    "num_frozen_layers": 6,
+    "fp16": true,
+    "gradient_checkpointing": true,
+    "num_workers": 2,
+    "seed": 42,
+    "patience": 4,
+    "max_train_samples": 100,
+    "max_val_samples": 30
+  },
+  "best_epoch": 1,
+  "best_val_balanced_accuracy": 0.6071428571428571,
+  "optimal_threshold": 0.6500000000000004,
+  "total_training_time_seconds": 77.85981011390686,
+  "epochs": [
+    {
+      "epoch": 1,
+      "train_loss": 0.6786702394485473,
+      "val_loss": 0.6742458045482635,
+      "val_participant_balanced_accuracy": 0.6071428571428571,
+      "val_participant_accuracy": 0.5217391304347826,
+      "val_participant_roc_auc": 0.48412698412698413,
+      "val_participant_sensitivity": 0.21428571428571427,
+      "val_participant_specificity": 1.0,
+      "optimal_threshold": 0.6500000000000004,
+      "duration_seconds": 75.61741805076599
+    }
+  ]
+}
