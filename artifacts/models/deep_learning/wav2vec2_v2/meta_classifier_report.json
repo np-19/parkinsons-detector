@@ -1,5 +1,5 @@
 {
-  "cross_validated_roc_auc": 0.9338163181372394,
+  "cross_validated_roc_auc": 0.9338321364168433,
   "optimal_threshold": 0.29,
   "metrics": {
     "accuracy": 0.9499136442141624,
