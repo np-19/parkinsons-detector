@@ -178,7 +178,20 @@ services:
               count: all
               capabilities: [gpu]
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: parkinsons-detector-frontend:latest
+    container_name: parkinsons-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
 volumes:
   huggingface-cache:
+
 
 

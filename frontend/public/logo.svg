@@ -1,0 +1,7 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="16" fill="#2563EB"/>
+  <!-- Soundwave / Neural pulse vectors in crisp white -->
+  <path d="M14 32H20L24 20L30 44L36 24L40 36L44 32H50" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Minimalist vocal resonance arcs -->
+  <circle cx="32" cy="32" r="24" stroke="white" stroke-width="1.5" stroke-opacity="0.3" stroke-dasharray="3 3"/>
+</svg>

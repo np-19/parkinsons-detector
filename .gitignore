@@ -3,6 +3,9 @@
 .env
 .vscode/
 .idea/
+node_modules/
+dist/
+
 
 # Large archives and packages (GitHub rejects files > 100MB)
 *.tar.gz
