@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: parkinsons-detector-backend:latest
+    container_name: parkinsons-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    shm_size: '4gb'
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/workspace
+      - DEVICE=cpu
+      - HF_HOME=/workspace/.cache/huggingface
+      - TORCH_HOME=/workspace/.cache/torch
+    volumes:
+      - ./artifacts:/workspace/artifacts:ro
+      - ./src:/workspace/src:ro
+      - ./backend:/workspace/backend
+      - huggingface-cache:/workspace/.cache/huggingface
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: parkinsons-detector-frontend:latest
+    container_name: parkinsons-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  huggingface-cache:
