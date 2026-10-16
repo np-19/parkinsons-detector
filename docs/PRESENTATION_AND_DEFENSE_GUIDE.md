@@ -212,9 +212,37 @@
 > * **Key Takeaway for Defense**:
 >   This counter-example proves that the AI is not a naive threshold detector. It actively protects patients from false alarms caused by transient morning throat dryness, while the multi-session protocol and automated warning box guarantee that true fluctuating Parkinson's patients are correctly identified.
 
+### Q19: "Where did the population statistics ($\mu, \sigma$) and weights ($+1.242, +1.948, +1.104$) come from?"
+> **Answer**: They are empirical and learned parameters directly calculated from the 579 participants in the mPower cohort:
+> 1. **Population Means ($\mu$) & Standard Deviations ($\sigma$)**: In `meta_classifier.py`, the empirical mean and standard deviation of each distribution feature were computed across all participants:
+>    * Mean Severity: $\mu = 0.385, \sigma = 0.245$
+>    * Top-2 Peak Severity: $\mu = 0.472, \sigma = 0.278$
+>    * Diurnal Fluctuation ($\sigma$): $\mu = 0.089, \sigma = 0.078$
+>    * Sample Size $\ln(N+1)$: $\mu = 1.250, \sigma = 0.612$
+> 2. **Trained Model Weights ($w$)**: Learned via Stochastic Gradient Descent (SGD) with L2 weight regularization ($\lambda = 0.01$) across 5-fold cross-validation.
+>    * Top-2 received the highest weight ($+1.948$) because two shaky recordings are the single strongest indicator of neurological tremor.
+>    * Fluctuation received a positive weight ($+1.104$) because real Parkinson's patients exhibit diurnal motor variance due to Levodopa wearing-off cycles.
+> 3. **The Relationship**:
+>    $$\text{Impact} = \text{Weight } (w) \times \left( \frac{\text{Patient Value } (x) - \mu}{\sigma} \right)$$
+
+### Q20: "How is the full-stack web application architected? Why separate backend and frontend into independent Docker containers?"
+> **Answer**: The application uses a decoupled microservices architecture with two independent containers orchestrated by `docker-compose.yml`:
+> 1. **Backend Container (`parkinsons-backend`, port 8000)**:
+>    * Built with FastAPI + PyTorch + Torchaudio.
+>    * Preloads the 836 MB Wav2Vec 2.0 checkpoint once during the ASGI `lifespan` startup event, holding it warm in GPU VRAM or CPU RAM for sub-second inference.
+>    * Exposes RESTful endpoints: `GET /api/health`, `GET /api/v1/meta-stats`, and `POST /api/v1/predict`.
+> 2. **Frontend Container (`parkinsons-frontend`, port 3000)**:
+>    * Built with React 18, TypeScript, and Tailwind CSS, compiled to static assets and served by an ultra-lightweight Alpine Nginx image (~25 MB).
+>    * Features HTML5 `MediaRecorder` API with a real-time `<canvas>` waveform visualizer, an 8-second progress countdown ring, and the calibrated continuous probability scale bar.
+> 3. **Why Separate Containers?**:
+>    * **Separation of Concerns**: Changing UI design or text does not rebuild the 4 GB PyTorch / CUDA layer.
+>    * **Security & Footprint**: The public-facing Nginx container has zero Python dependencies or compilers.
+>    * **Independent Deployment**: The frontend can be deployed to global edge CDNs (Vercel, Cloudflare Pages), while the backend runs on a dedicated compute server.
+
 ---
 
 ## 5. Verification Commands to Reproduce on Local Machine
+
 
 
 

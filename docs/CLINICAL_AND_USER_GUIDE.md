@@ -353,4 +353,93 @@ The pipeline was empirically stress-tested across different human speakers and a
 
 **Conclusion**: Scoring `0.0000` across 3 distinct human speakers proves the model is **speaker-independent**—it evaluates vocal cord neuromuscular stability rather than individual pitch, accent, or vocal tract geometry.
 
+---
+
+## 11. Full-Stack Web Application & API Deployment
+
+To enable clinical decision support at the point of care, the diagnostic pipeline is wrapped in a full-stack, containerized web application (`NeuroVocal`).
+
+### A. System Architecture
+
+```text
+       [ Patient / Clinician Web Browser ]
+                       │
+                       │ HTTP/HTTPS (Port 3000)
+                       ▼
+       ┌───────────────────────────────┐
+       │   Frontend Container (Nginx)  │
+       │   - React 18, TypeScript      │
+       │   - Tailwind CSS              │
+       │   - HTML5 MediaRecorder API   │
+       │   - Reverse Proxy (/api/*)    │
+       └──────────────┬────────────────┘
+                      │
+                      │ Internal Docker Bridge Network (Port 8000)
+                      ▼
+       ┌───────────────────────────────┐
+       │   Backend Container (FastAPI) │
+       │   - PyTorch + Torchaudio      │
+       │   - In-memory PatientPredictor│
+       │   - Multi-format Audio Loader │
+       │   - CUDA Acceleration         │
+       └───────────────────────────────┘
+```
+
+### B. RESTful API Endpoints Specification
+
+| Method | Route | Request Type | Response Model | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/health` | None | `HealthResponse` | Returns service health, PyTorch version, active hardware (`cuda:0` / `cpu`), and supported audio formats. |
+| `GET` | `/api/v1/meta-stats` | None | `MetaStatsResponse` | Returns the 10 reference population means, standard deviations, trained weights, and $0.29$ threshold. |
+| `POST` | `/api/v1/predict` | `multipart/form-data`<br>`files: List[UploadFile]` | `PredictionResponse` | **Core Clinical Endpoint**: Evaluates 1 to $N$ voice files, computes order moments, applies the Meta-Classifier, and returns structured diagnosis. |
+| `POST` | `/api/v1/predict/single` | `multipart/form-data`<br>`file: UploadFile` | `PredictionResponse` | Convenience endpoint evaluating a single audio file. |
+| `GET` | `/docs` | None | Interactive Swagger UI | OpenAPI interactive documentation for testing endpoints. |
+
+### C. Frontend Clinical Trust & Minimalism Design
+The user interface (`frontend/src/`) is designed around clinical authority, calmness, and scientific precision:
+* **Brand & Logo (`frontend/public/logo.svg`)**: Bespoke vector mark combining acoustic oscillation with a medical cross in Clinical Blue (`#2563EB`).
+* **Microphone Ingestion (`AudioRecorder.tsx`)**: Directly accesses microphone via `navigator.mediaDevices.getUserMedia` with raw audio settings (`autoGainControl: false`, `noiseSuppression: false`), rendering a live real-time `<canvas>` waveform and an 8-second progress countdown ring.
+* **File Upload Dropzone (`Dropzone.tsx`)**: Drag-and-drop zone supporting `.wav`, `.mp3`, `.mpeg`, `.ogg`, `.m4a`, and `.webm` up to 25 MB per file.
+* **Continuous Calibrated Scale (`DiagnosticCard.tsx`)**: Displays patient's Meta-Score along a 0.00 to 1.00 linear scale bar with a physical vertical notch at the clinical decision boundary ($0.29$).
+* **Automated Pharmacological Guardrails**: Displays conditional alerts explaining Levodopa masking when only one take is analyzed, or verifies multi-session protocol satisfaction when $N \ge 2$.
+* **Print / PDF Summary**: One-click export button formatting the report for patient records or clinical referral.
+
+### D. How to Launch the Application
+
+#### Option 1: Full-Stack Docker Compose (Production Standard)
+```bash
+# Build and run both backend and frontend as background daemons
+sudo docker compose up -d --build backend frontend
+
+# Check status
+sudo docker compose ps
+
+# View live backend logs
+sudo docker compose logs -f backend
+
+# Stop the services
+sudo docker compose down
+```
+* **Frontend UI**: `http://localhost:3000`
+* **Backend API & Swagger Docs**: `http://localhost:8000/docs`
+
+#### Option 2: Local Developer Scripts (Instant Startup)
+```bash
+# Terminal 1 — Start Backend:
+sudo ./scripts/run_backend.sh
+
+# Terminal 2 — Start Frontend:
+./scripts/run_frontend.sh
+```
+
+### E. Production Cloud Hosting & SSL Requirement
+> [!IMPORTANT]
+> Modern web browsers (Chrome, Safari, Firefox) **block microphone recording** (`getUserMedia`) over unencrypted `http://` connections outside of `localhost`. In production, the app **must be served over HTTPS**.
+
+* **Recommended Cloud Setup**:
+  1. **Frontend**: Deploy `frontend/` to **Vercel** or **Cloudflare Pages** (Free, automated SSL, global edge CDN).
+  2. **Backend**: Deploy `backend/` to a 4 GB RAM Linux cloud instance (DigitalOcean, Hetzner, AWS) via Docker.
+  3. **Reverse Proxy & Auto-SSL**: Use **Caddy** (`reverse_proxy localhost:3000`) for automatic Let's Encrypt SSL certificates.
+
+
 

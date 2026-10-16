@@ -92,3 +92,42 @@ To reproduce the 91.20% participant metrics in ~1 second (pure Python standard l
 ```bash
 python3 src/deep_learning/meta_classifier.py --v2-predictions artifacts/models/deep_learning/wav2vec2_v2/test_predictions.csv
 ```
+
+---
+
+## Full-Stack Clinical Web Application (NeuroVocal)
+
+This repository includes a production-ready, clinical-grade web application with a **FastAPI backend** and a **React 18 / TypeScript / Tailwind CSS frontend**.
+
+### 1. Launch with Docker Compose (Recommended)
+
+```bash
+# Build and run backend (port 8000) and frontend (port 3000) in background
+sudo docker compose up -d --build backend frontend
+
+# Check status
+sudo docker compose ps
+
+# Stop when finished
+sudo docker compose down
+```
+
+* **Frontend Clinical UI**: `http://localhost:3000`
+* **Interactive API Documentation**: `http://localhost:8000/docs`
+
+### 2. Launch with Local Development Scripts
+
+```bash
+# Terminal 1 — Start FastAPI Backend:
+sudo ./scripts/run_backend.sh
+
+# Terminal 2 — Start React Frontend:
+./scripts/run_frontend.sh
+```
+
+### 3. Core API Endpoints
+
+* `GET /api/health`: Returns model warm status, active device (CUDA / CPU), and supported formats.
+* `GET /api/v1/meta-stats`: Exposes 10-moment reference statistics and the $0.29$ threshold.
+* `POST /api/v1/predict`: Accepts $1$ to $N$ audio files (`.wav`, `.ogg`, `.mpeg`, `.m4a`, `.webm`), runs sliding-window inference and the Meta-Classifier, and returns structured diagnosis JSON.
+
