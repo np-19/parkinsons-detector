@@ -72,9 +72,13 @@ def evaluate_external(
     # Load Model
     print(f"\nLoading model checkpoint from {model_path}...")
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    config = checkpoint.get("config", {})
+    num_frozen = config.get("num_frozen_layers", checkpoint.get("num_frozen_layers", 4))
+    dropout = config.get("dropout", checkpoint.get("dropout", 0.3))
     model = Wav2Vec2ForParkinsons(
-        num_frozen_transformer_layers=checkpoint.get("num_frozen_transformer_layers", 4),
-        dropout=checkpoint.get("dropout", 0.3),
+        num_frozen_layers=num_frozen,
+        dropout=dropout,
+        gradient_checkpointing=False,
     )
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)
@@ -238,3 +242,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
