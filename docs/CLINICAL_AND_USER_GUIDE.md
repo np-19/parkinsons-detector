@@ -275,7 +275,19 @@ $$\text{Logit} = \sum_{j=1}^{10} w_j \left(\frac{f_j - \mu_j^{\text{ref}}}{\sigm
 $$\text{Meta-Score} = \frac{1}{1 + e^{-\text{Logit}}}$$
 $$\text{Decision} = \begin{cases} \text{POSITIVE}, & \text{if Meta-Score} \ge 0.29 \\ \text{NEGATIVE}, & \text{if Meta-Score} < 0.29 \end{cases}$$
 
+#### Dual-Threshold Architecture: $\tau_{\text{base}} = 0.360$ vs. $\tau_{\text{meta}} = 0.290$
+The pipeline operates with two distinct, mathematically decoupled decision thresholds:
+1. **Acoustic Base Model Threshold ($\tau_{\text{base}} = 0.360$)**:
+   * Evaluates individual $8.0\text{s}$ audio clips.
+   * If an individual take has $P_{\text{rec}} \ge 0.360$, its local status is flagged as **`Dysarthric / Tremor`**; otherwise **`Normal Phonation`**.
+   * Calibrated during validation epoch checkpointing to maximize clip-level balanced accuracy ($71.96\%$).
+2. **Clinical Meta-Classifier Threshold ($\tau_{\text{meta}} = 0.290$)**:
+   * Evaluates the aggregated 10-moment longitudinal patient distribution.
+   * Calibrated via out-of-fold grid search ($t \in [0.15, 0.80]$) across all 579 participants to maximize patient-level Youden's Index ($91.20\%$ balanced accuracy, $83.56\%$ sensitivity, $98.85\%$ specificity).
+   * A default $0.50$ threshold is inappropriate in medical screening because it assumes equal error costs. At $0.50$, sensitivity drops to ~65% (missing early-stage patients). The $0.29$ threshold balances sensitivity while maintaining high specificity (only 5 false alarms out of 433 controls).
+
 ### B. Single Recording ($N = 1$) & The Zero-Variance Derivation
+
 When only one audio file is provided ($P_1 = P$):
 1. Order statistics collapse: $\mu = \max = \min = \text{top}_2 = p_{75} = P$.
 2. **Variance collapses to zero**: $\sigma = 0.0$.

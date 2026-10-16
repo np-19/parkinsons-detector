@@ -239,9 +239,25 @@
 >    * **Security & Footprint**: The public-facing Nginx container has zero Python dependencies or compilers.
 >    * **Independent Deployment**: The frontend can be deployed to global edge CDNs (Vercel, Cloudflare Pages), while the backend runs on a dedicated compute server.
 
+### Q21: "Why was the cutoff threshold chosen as 0.29? Is it different for the base model versus the meta-classifier, and why?"
+> **Answer**: Yes, they operate with different thresholds because they solve different mathematical and clinical problems:
+> 
+> | Level | Model | Operating Threshold | Optimization Target | What It Classifies |
+> | :--- | :--- | :---: | :--- | :--- |
+> | **Acoustic Stage 1** | Wav2Vec 2.0 Base | **$\tau = 0.360$** | Recording-level balanced accuracy on validation audio | Does this 8-second audio clip exhibit vocal dysarthria/tremor? |
+> | **Clinical Stage 2** | Multi-Moment Meta-Classifier | **$\tau = 0.290$** | Patient-level Youden's Index across 5-fold cross-validation | Does this human patient have Parkinson's Disease? |
+> 
+> * **How 0.360 was Chosen for the Base Model**:
+>   During validation epoch checkpointing, `find_best_participant_threshold` scanned thresholds from $0.10$ to $0.90$. The value $0.360$ maximizes balanced accuracy on individual audio clips, separating normal speech from acoustic micro-instabilities.
+> * **How 0.29 was Chosen for the Meta-Classifier**:
+>   In `src/deep_learning/meta_classifier.py` (lines 125–132), an empirical grid search across candidate thresholds $t \in [0.15, 0.80]$ was conducted over the 579 participants. The threshold $0.29$ achieved the global peak in **Balanced Accuracy ($91.20\%$)**, with **$83.56\%$ Sensitivity** (122 / 146 true PD patients) and **$98.85\%$ Specificity** (428 / 433 controls correct — only 5 false alarms out of 433).
+> * **Why not the naive 0.50 default?**:
+>   A default $0.50$ threshold assumes equal class balance and symmetrical cost of errors. In medical screening, a False Negative (missing a neurodegenerative disease) is far more dangerous than a False Positive (prompting a clinical follow-up). At $0.50$, sensitivity drops to ~65%, missing early-stage or medicated patients. The $0.29$ threshold balances sensitivity ($83.6\%$) while maintaining near-perfect specificity ($98.85\%$).
+
 ---
 
 ## 5. Verification Commands to Reproduce on Local Machine
+
 
 
 
