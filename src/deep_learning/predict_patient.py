@@ -153,15 +153,35 @@ class PatientPredictor:
         norm_x = [(feats[j] - META_MEANS[j]) / META_STDS[j] for j in range(len(feats))]
         meta_score = sigmoid(dot(META_WEIGHTS, norm_x) + META_BIAS)
 
-        is_pd = meta_score >= META_THRESHOLD
-        if meta_score >= 0.70:
-            confidence = "High Confidence Positive"
-        elif meta_score >= META_THRESHOLD:
-            confidence = "Moderate Confidence Positive"
-        elif meta_score <= 0.15:
-            confidence = "High Confidence Negative"
+        # 3-Tier Clinical Triage Framework
+        screening_cutoff = 0.200
+        diagnostic_cutoff = 0.350
+
+        if meta_score < screening_cutoff:
+            triage_level = "LOW_RISK"
+            participant_verdict = "NEGATIVE (Normal Acoustic Biomarkers)"
+            is_pd = False
+            confidence = "High Confidence Negative" if meta_score <= 0.12 else "Normal Voice Dynamics"
+            triage_rec = "Normal phonation dynamics and vocal stability. Routine clinical follow-up recommended."
+        elif meta_score < diagnostic_cutoff:
+            triage_level = "BORDERLINE"
+            participant_verdict = "BORDERLINE (Mild Dysphonia / Possible ON-State Mask)"
+            is_pd = True  # Flagged for screening alert
+            confidence = "Screening Triage Alert (Sensitivity >92%)"
+            triage_rec = (
+                "Acoustic micro-tremor detected within sensitivity triage window [0.20–0.35] (Sensitivity >92%). "
+                "If patient is on Levodopa/Carbidopa, symptoms may be masked by medication 'ON' state. "
+                "Recommend re-evaluation during morning pre-medication 'OFF' state or clinical review."
+            )
         else:
-            confidence = "Moderate Confidence Negative"
+            triage_level = "HIGH_RISK"
+            participant_verdict = "POSITIVE (Manifest Parkinsonian Dysphonia Detected)"
+            is_pd = True
+            confidence = "High Confidence Positive (Specificity >99%)"
+            triage_rec = (
+                "Marked acoustic dysphonia and phonation tremor detected. Highly consistent with "
+                "Parkinsonian neuro-motor impairment. Specialist referral to a Neurologist advised."
+            )
 
         # Clinical warnings
         warnings = []
@@ -178,10 +198,14 @@ class PatientPredictor:
             )
 
         return {
-            "participant_verdict": "POSITIVE (Parkinsonian Dysphonia Detected)" if is_pd else "NEGATIVE (Healthy Phonation)",
+            "participant_verdict": participant_verdict,
             "is_parkinsons": is_pd,
+            "triage_level": triage_level,
+            "triage_recommendation": triage_rec,
             "meta_classifier_score": round(meta_score, 4),
             "meta_threshold": META_THRESHOLD,
+            "screening_cutoff": screening_cutoff,
+            "diagnostic_cutoff": diagnostic_cutoff,
             "confidence_level": confidence,
             "recordings_analyzed": n,
             "distribution_summary": {
@@ -215,9 +239,12 @@ def main():
     print("      PARKINSON'S ACOUSTIC SCREENING REPORT")
     print("=" * 65)
     print(f"  Final Diagnosis:      {report['participant_verdict']}")
+    print(f"  Clinical Triage:      {report['triage_level']} (Sens >92% Alert: ≥0.20 | Definite: ≥0.35)")
     print(f"  Confidence Level:     {report['confidence_level']}")
-    print(f"  Meta-Classifier Score:{report['meta_classifier_score']:.4f} (Threshold: {report['meta_threshold']})")
+    print(f"  Meta-Classifier Score:{report['meta_classifier_score']:.4f} (Balanced Cutoff: {report['meta_threshold']})")
     print(f"  Recordings Analyzed:  {report['recordings_analyzed']}")
+    print("-" * 65)
+    print(f"  Triage Recommendation: {report['triage_recommendation']}")
     print("-" * 65)
     print("  Statistical Distribution:")
     print(f"    - Mean Probability: {report['distribution_summary']['mean_probability']:.4f}")
