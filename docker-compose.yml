@@ -150,6 +150,35 @@ services:
       --audio-root data/processed_audio
       --batch-size 8
 
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: parkinsons-detector-backend:latest
+    container_name: parkinsons-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    shm_size: '4gb'
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/workspace
+      - HF_HOME=/workspace/.cache/huggingface
+      - TORCH_HOME=/workspace/.cache/torch
+    volumes:
+      - ./artifacts:/workspace/artifacts:ro
+      - ./src:/workspace/src:ro
+      - ./backend:/workspace/backend
+      - huggingface-cache:/workspace/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
 volumes:
   huggingface-cache:
+
 
