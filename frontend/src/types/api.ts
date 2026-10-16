@@ -17,9 +17,13 @@ export interface StatisticalDistribution {
 export interface PredictionResponse {
   diagnosis: string;
   is_pd: boolean;
+  triage_level?: "LOW_RISK" | "BORDERLINE" | "HIGH_RISK";
+  triage_recommendation?: string;
   confidence_level: string;
   meta_classifier_score: number;
   threshold: number;
+  screening_cutoff?: number;
+  diagnostic_cutoff?: number;
   recordings_analyzed: number;
   distribution: StatisticalDistribution;
   recordings: RecordingResult[];

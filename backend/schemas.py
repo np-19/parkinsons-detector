@@ -24,11 +24,15 @@ class StatisticalDistribution(BaseModel):
 
 class PredictionResponse(BaseModel):
     """Comprehensive patient-level clinical acoustic screening report."""
-    diagnosis: str = Field(..., description="'NEGATIVE (Normal Phonation Dynamics)' or 'POSITIVE (Parkinsonian Dysphonia Detected)'")
-    is_pd: bool = Field(..., description="Boolean flag: True if positive, False if negative")
+    diagnosis: str = Field(..., description="'NEGATIVE (Normal Phonation Dynamics)', 'BORDERLINE (Mild Dysphonia)', or 'POSITIVE (Parkinsonian Dysphonia)'")
+    is_pd: bool = Field(..., description="Boolean flag: True if positive/borderline screening alert, False if negative")
+    triage_level: str = Field(default="LOW_RISK", description="'LOW_RISK', 'BORDERLINE', or 'HIGH_RISK'")
+    triage_recommendation: str = Field(default="", description="Actionable clinical next steps and follow-up guidance")
     confidence_level: str = Field(..., description="Stratified clinical confidence tier")
     meta_classifier_score: float = Field(..., ge=0.0, le=1.0, description="Standardized multi-moment Meta-Classifier score")
-    threshold: float = Field(default=0.29, description="Clinical diagnostic decision boundary threshold")
+    threshold: float = Field(default=0.29, description="Balanced diagnostic cutoff threshold")
+    screening_cutoff: float = Field(default=0.20, description="Screening triage threshold (>92% Sensitivity)")
+    diagnostic_cutoff: float = Field(default=0.35, description="High-specificity diagnostic threshold (>99% Specificity)")
     recordings_analyzed: int = Field(..., description="Count of recordings analyzed")
     distribution: StatisticalDistribution = Field(..., description="Statistical distribution metrics")
     recordings: List[RecordingResult] = Field(..., description="Breakdown of each recording evaluated")

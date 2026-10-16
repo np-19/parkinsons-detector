@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, AlertTriangle, Printer, RotateCcw, ShieldCheck } from "lucide-react";
+import { CheckCircle2, AlertTriangle, AlertCircle, Printer, RotateCcw, ShieldCheck } from "lucide-react";
 import { PredictionResponse } from "../types/api";
 
 interface DiagnosticCardProps {
@@ -8,9 +8,7 @@ interface DiagnosticCardProps {
 }
 
 export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset }) => {
-  const isPositive = report.is_pd;
   const scorePercent = Math.min(Math.max(report.meta_classifier_score * 100, 0), 100);
-  const thresholdPercent = report.threshold * 100;
 
   const handlePrint = () => {
     window.print();
@@ -50,72 +48,124 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
         </div>
       </div>
 
-      {/* Hero Diagnostic Badge */}
-      <div
-        className={`my-5 p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-          isPositive
-            ? "bg-rose-50/70 border-rose-200 text-rose-950"
-            : "bg-emerald-50/70 border-emerald-200 text-emerald-950"
-        }`}
-      >
-        <div className="flex items-start sm:items-center gap-3.5">
+      {/* Hero Diagnostic Badge with 3-Tier Clinical Triage */}
+      {(() => {
+        const triage = report.triage_level || (report.meta_classifier_score < 0.20 ? "LOW_RISK" : report.meta_classifier_score < 0.35 ? "BORDERLINE" : "HIGH_RISK");
+        
+        let badgeBg = "bg-emerald-50/70 border-emerald-200 text-emerald-950";
+        let iconBg = "bg-emerald-100 text-emerald-700";
+        let IconComponent = CheckCircle2;
+        let triageTag = "Low Clinical Risk (Healthy Voice)";
+        let triageTagColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
+
+        if (triage === "BORDERLINE") {
+          badgeBg = "bg-amber-50/80 border-amber-300 text-amber-950";
+          iconBg = "bg-amber-100 text-amber-700";
+          IconComponent = AlertCircle;
+          triageTag = "Borderline Triage (Sensitivity >92%)";
+          triageTagColor = "bg-amber-100 text-amber-900 border-amber-300";
+        } else if (triage === "HIGH_RISK") {
+          badgeBg = "bg-rose-50/70 border-rose-200 text-rose-950";
+          iconBg = "bg-rose-100 text-rose-700";
+          IconComponent = AlertTriangle;
+          triageTag = "High Clinical Risk (Definitive Dysphonia)";
+          triageTagColor = "bg-rose-100 text-rose-800 border-rose-200";
+        }
+
+        return (
+          <div className={`my-5 p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${badgeBg}`}>
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-2xs ${iconBg}`}>
+                <IconComponent className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="text-base sm:text-lg font-bold tracking-tight">
+                    {report.diagnosis}
+                  </div>
+                  <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${triageTagColor}`}>
+                    {triageTag}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-600 mt-1">
+                  Confidence Tier: <span className="font-semibold text-slate-900">{report.confidence_level}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-right sm:border-l sm:border-slate-200/60 sm:pl-5 shrink-0">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-medium">Meta-Classifier Score</div>
+              <div className="text-2xl font-bold font-mono text-slate-900">
+                {report.meta_classifier_score.toFixed(4)}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Calibrated 3-Zone Clinical Probability Scale */}
+      <div className="my-5 p-4 sm:p-5 rounded-2xl bg-slate-50/90 border border-slate-200/80">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 mb-3 font-medium gap-1">
+          <span className="font-semibold text-slate-800">3-Tier Clinical Triage Scale</span>
+          <div className="flex items-center gap-3 text-[11px] text-slate-500">
+            <span>Screening Cutoff: <strong>0.20</strong> (Sens &gt;92%)</span>
+            <span>Balanced: <strong>0.29</strong></span>
+            <span>Diagnostic: <strong>0.35</strong> (Spec &gt;99%)</span>
+          </div>
+        </div>
+
+        {/* 3-Zone Segmented Track */}
+        <div className="relative w-full h-4 rounded-full overflow-hidden flex bg-slate-200 border border-slate-300/60 shadow-inner">
+          {/* Zone 1: Green [0.00 - 0.20] (20%) */}
+          <div className="w-[20%] h-full bg-emerald-300/80" title="Low Risk Zone (<0.20)" />
+          {/* Zone 2: Amber [0.20 - 0.35] (15%) */}
+          <div className="w-[15%] h-full bg-amber-300/90" title="Borderline Screening Alert Zone (0.20–0.35, Sensitivity >92%)" />
+          {/* Zone 3: Red [0.35 - 1.00] (65%) */}
+          <div className="w-[65%] h-full bg-rose-300/80" title="High Risk Zone (≥0.35)" />
+        </div>
+
+        {/* Needle Pin / Marker for Patient Score */}
+        <div className="relative w-full h-3">
           <div
-            className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${
-              isPositive ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"
-            }`}
+            className="absolute top-[-16px] -translate-x-1/2 flex flex-col items-center transition-all duration-500 z-20 pointer-events-none"
+            style={{ left: `${scorePercent}%` }}
           >
-            {isPositive ? <AlertTriangle className="w-6 h-6" /> : <CheckCircle2 className="w-6 h-6" />}
-          </div>
-          <div>
-            <div className="text-base sm:text-lg font-bold tracking-tight">
-              {report.diagnosis}
-            </div>
-            <div className="text-xs text-slate-600 mt-0.5">
-              Confidence Tier: <span className="font-semibold">{report.confidence_level}</span>
+            <div className="w-2.5 h-2.5 rounded-full bg-slate-900 ring-2 ring-white shadow-sm" />
+            <div className="text-[10px] font-bold font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded shadow-xs border border-slate-200 -mt-0.5 whitespace-nowrap">
+              {report.meta_classifier_score.toFixed(3)}
             </div>
           </div>
         </div>
 
-        <div className="text-right sm:border-l sm:border-slate-200/60 sm:pl-5 shrink-0">
-          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-medium">Meta-Classifier Score</div>
-          <div className="text-2xl font-bold font-mono text-slate-900">
-            {report.meta_classifier_score.toFixed(4)}
+        {/* Zone Labels Below Track */}
+        <div className="grid grid-cols-3 text-[10px] sm:text-[11px] font-medium pt-2 text-center text-slate-500">
+          <div className="text-left text-emerald-800">
+            <span className="font-semibold">0.00 – 0.20</span>
+            <div className="text-[10px] text-slate-400">Low Risk (Healthy)</div>
+          </div>
+          <div className="text-center text-amber-800">
+            <span className="font-semibold">0.20 – 0.35</span>
+            <div className="text-[10px] text-slate-400">Borderline / ON-State (Sens &gt;92%)</div>
+          </div>
+          <div className="text-right text-rose-800">
+            <span className="font-semibold">0.35 – 1.00</span>
+            <div className="text-[10px] text-slate-400">High Risk (Dysphonic)</div>
           </div>
         </div>
       </div>
 
-      {/* Calibrated Continuous Linear Gauge */}
-      <div className="my-6 p-4 rounded-xl bg-slate-50 border border-slate-200/70">
-        <div className="flex items-center justify-between text-xs text-slate-600 mb-2 font-medium">
-          <span>Diagnostic Probability Scale</span>
-          <span>Decision Boundary: <strong>{report.threshold}</strong></span>
+      {/* Actionable Clinical Recommendation & Next Steps */}
+      {report.triage_recommendation && (
+        <div className="my-5 p-4 rounded-xl bg-blue-50/70 border border-blue-200/80 text-xs">
+          <div className="flex items-center gap-2 font-semibold text-blue-950 mb-1.5">
+            <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>Clinical Triage Recommendation & Decision Support</span>
+          </div>
+          <p className="text-slate-700 leading-relaxed">
+            {report.triage_recommendation}
+          </p>
         </div>
-
-        {/* The Track */}
-        <div className="relative w-full h-3 bg-slate-200 rounded-full overflow-visible">
-          {/* Fill Bar */}
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              isPositive ? "bg-rose-500" : "bg-blue-600"
-            }`}
-            style={{ width: `${scorePercent}%` }}
-          />
-
-          {/* Notch for Threshold (0.29) */}
-          <div
-            className="absolute top-[-4px] bottom-[-4px] w-1 bg-slate-900 rounded-full z-10"
-            style={{ left: `${thresholdPercent}%` }}
-            title={`Clinical Cutoff Threshold: ${report.threshold}`}
-          />
-        </div>
-
-        {/* Labels below bar */}
-        <div className="flex justify-between text-[11px] text-slate-400 mt-2 font-mono">
-          <span>0.00 (Healthy Control)</span>
-          <span className="text-slate-700 font-semibold pl-6">▲ Cutoff (0.29)</span>
-          <span>1.00 (Severe Dysphonia)</span>
-        </div>
-      </div>
+      )}
 
       {/* 3 Key Statistical Moments Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-6">

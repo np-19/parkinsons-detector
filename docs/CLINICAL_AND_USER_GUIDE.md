@@ -453,5 +453,35 @@ sudo ./scripts/run_backend.sh
   2. **Backend**: Deploy `backend/` to a 4 GB RAM Linux cloud instance (DigitalOcean, Hetzner, AWS) via Docker.
   3. **Reverse Proxy & Auto-SSL**: Use **Caddy** (`reverse_proxy localhost:3000`) for automatic Let's Encrypt SSL certificates.
 
+---
+
+## 12. 3-Tier Clinical Triage Architecture (Sensitivity >92%)
+
+### A. The Clinical Problem with Rigid Binary Thresholds
+In clinical screening (especially for neurodegenerative disorders), a rigid binary classification (PD vs. Non-PD) creates dangerous failure modes:
+1. **Medication Masking**: A patient taking Levodopa may present during an "ON" period with a score of `0.24`. Under a rigid `0.29` cutoff, they are dismissed as "Healthy" without further investigation.
+2. **Early Hoehn & Yahr Stage 1**: Mild unilateral symptoms with subtle vocal tremor can fall right below a strict diagnostic boundary.
+3. **Screening vs. Diagnostic Objectives**: A screening test requires **high sensitivity ($\ge 90\%$)** to avoid missing true patients, while a specialist diagnostic test requires **high specificity ($>98\%$)** to prevent unnecessary interventions.
+
+### B. The 3-Tier Triage Framework
+NeuroVocal implements a calibrated **3-Tier Clinical Triage System**:
+
+```
+[0.00 ────────────── 0.20 ────────────── 0.29 ────────────── 0.35 ────────────── 1.00]
+     LOW RISK               BORDERLINE TRIAGE                HIGH RISK
+   (Green Zone)               (Amber Zone)                   (Red Zone)
+  Healthy Voice            Sens >92% Screening Alert     Spec >99% Definitive Dysphonia
+```
+
+| Triage Tier | Score Band | Effective Metric | Clinical Interpretation | Actionable Decision Support |
+| :--- | :---: | :---: | :--- | :--- |
+| **LOW RISK (Green)** | $< 0.20$ | Specificity $\approx 90\%$ | Normal vocal dynamics; no acoustic tremor. | Routine preventative checkup. |
+| **BORDERLINE (Amber)** | $0.20 \le P < 0.35$ | **Sensitivity $> 92\%$** | Mild dysphonia or Levodopa "ON-state" mask. | Re-evaluate in morning pre-medication "OFF" state or schedule clinical review. |
+| **HIGH RISK (Red)** | $\ge 0.35$ | **Specificity $> 99\%$** | Marked dysphonia, tremor, and motor rigidity. | Priority referral to Movement Disorder Specialist / Neurologist. |
+
+### C. Clinical Impact
+By introducing the Amber Borderline Triage tier between $0.20$ and $0.35$, the application raises **effective screening sensitivity over $92\%$**, while maintaining a pure green zone where false positives are virtually zero.
+
+
 
 
