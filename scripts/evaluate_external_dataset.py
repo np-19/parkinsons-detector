@@ -105,13 +105,14 @@ def evaluate_external(
                 waveform = waveform.squeeze(0)
                 n_samples = waveform.shape[0]
 
-                # Multi-crop TTA
+                # Multi-crop TTA (without artificial dead silence padding)
                 crops = []
-                if n_samples <= target_samples:
-                    pad_amount = target_samples - n_samples
-                    padded = F.pad(waveform, (0, pad_amount))
+                if n_samples < target_samples:
+                    # Seamlessly tile continuous phonation instead of appending dead silence
+                    repeats = math.ceil(target_samples / n_samples)
+                    tiled = waveform.repeat(repeats)[:target_samples]
                     for _ in range(num_crops):
-                        crops.append(padded)
+                        crops.append(tiled)
                 else:
                     max_start = n_samples - target_samples
                     step = max_start / max(num_crops - 1, 1)

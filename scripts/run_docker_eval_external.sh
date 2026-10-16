@@ -14,7 +14,7 @@ fi
 DATASET_DIR="${1:-test_samples/Voice_Dataset}"
 MODEL_PATH="${2:-artifacts/models/deep_learning/wav2vec2_v2/best_model.pt}"
 NUM_CROPS="${3:-5}"
-DURATION="${4:-8.0}"
+DURATION="${4:-3.5}"
 
 echo "======================================================================"
 echo " Evaluating Model on External Voice Dataset"
@@ -40,3 +40,4 @@ ${DOCKER_BIN} run --gpus all --rm \
     --model-path "${MODEL_PATH}" \
     --num-crops "${NUM_CROPS}" \
     --duration "${DURATION}"
+
