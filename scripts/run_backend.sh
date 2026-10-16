@@ -39,3 +39,4 @@ ${DOCKER_BIN} run --gpus all --rm -it \
   -v "$(pwd)/backend:/workspace/backend:z" \
   -v "${HOME}/.cache/huggingface:/workspace/.cache/huggingface:z" \
   parkinsons-detector-backend:latest
+

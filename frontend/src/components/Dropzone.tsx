@@ -37,10 +37,10 @@ export const Dropzone: React.FC<DropzoneProps> = ({ onFilesSelected }) => {
       onDragLeave={() => setIsDragOver(false)}
       onDrop={handleDrop}
       onClick={() => fileInputRef.current?.click()}
-      className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all ${
+      className={`border-2 border-dashed rounded-2xl py-7 px-4 sm:p-8 flex flex-col items-center justify-center cursor-pointer transition-all touch-manipulation select-none ${
         isDragOver
-          ? "border-blue-500 bg-blue-50/50"
-          : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+          ? "border-blue-500 bg-blue-50/70 scale-[0.99]"
+          : "border-slate-200/90 hover:border-blue-300 hover:bg-slate-50/60 active:bg-slate-100"
       }`}
     >
       <input
@@ -52,17 +52,18 @@ export const Dropzone: React.FC<DropzoneProps> = ({ onFilesSelected }) => {
         className="hidden"
       />
 
-      <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mb-2">
-        <UploadCloud className="w-5 h-5 text-blue-600" />
+      <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3 border border-blue-100 shadow-2xs">
+        <UploadCloud className="w-6 h-6 text-blue-600" />
       </div>
 
-      <div className="text-sm font-medium text-slate-800 text-center">
-        Drop audio recording(s) here, or <span className="text-blue-600 underline">browse files</span>
+      <div className="text-sm font-semibold text-slate-800 text-center">
+        Drop audio recordings here, or <span className="text-blue-600 underline underline-offset-2">browse files</span>
       </div>
-      <div className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-        <FileAudio className="w-3.5 h-3.5" />
-        Supports .wav, .m4a, .ogg, .mpeg, .webm (Up to 25 MB)
+      <div className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5 text-center">
+        <FileAudio className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+        <span>Supports WAV, M4A, OGG, MP3, FLAC, WEBM (Up to 25 MB)</span>
       </div>
     </div>
   );
 };
+

@@ -98,3 +98,4 @@ async def predict_single_recording(
     ),
 ) -> PredictionResponse:
     return await predict_recordings(files=[file])
+

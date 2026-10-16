@@ -10,27 +10,27 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ health, loading }) => {
   return (
     <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-xs">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand & Logo */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-xs">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-xs shrink-0">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-6 sm:h-6">
               <path d="M2 12h3l2-6 4 12 3-9 2 6h6" />
             </svg>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-semibold text-slate-900 tracking-tight text-lg">NeuroVocal</h1>
-              <span className="text-[11px] font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200/60">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h1 className="font-semibold text-slate-900 tracking-tight text-base sm:text-lg truncate">NeuroVocal</h1>
+              <span className="text-[10px] sm:text-[11px] font-medium bg-blue-50 text-blue-700 px-1.5 sm:px-2 py-0.5 rounded-full border border-blue-200/60 shrink-0">
                 v2.0
               </span>
             </div>
-            <p className="text-xs text-slate-500">Acoustic Parkinson's Screening Engine</p>
+            <p className="text-[11px] sm:text-xs text-slate-500 truncate hidden xs:block">Acoustic Parkinson's Screening Engine</p>
           </div>
         </div>
 
         {/* Status Indicators */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {loading ? (
             <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-200">
               <Activity className="w-3.5 h-3.5 animate-pulse text-blue-500" />
@@ -38,13 +38,14 @@ export const Header: React.FC<HeaderProps> = ({ health, loading }) => {
             </div>
           ) : health && health.model_loaded ? (
             <div className="flex items-center gap-2">
-              <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-200">
+              <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-200">
                 <Cpu className="w-3.5 h-3.5 text-slate-400" />
                 <span className="capitalize">{health.device.replace(":0", "")}</span>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="font-medium">Model Ready (91.2%)</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span className="font-medium hidden sm:inline">Model Ready (91.2%)</span>
+                <span className="font-medium sm:hidden">Ready</span>
               </div>
             </div>
           ) : (
@@ -58,3 +59,4 @@ export const Header: React.FC<HeaderProps> = ({ health, loading }) => {
     </header>
   );
 };
+

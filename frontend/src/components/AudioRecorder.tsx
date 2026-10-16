@@ -164,18 +164,22 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplet
   const progressPercent = Math.min((recordingSeconds / TARGET_DURATION) * 100, 100);
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center w-full">
       {/* Visualizer Canvas during recording */}
-      <div className={`w-full h-20 bg-slate-50 border border-slate-200/80 rounded-xl mb-4 overflow-hidden relative ${isRecording ? "block" : "hidden"}`}>
+      <div
+        className={`w-full h-20 bg-slate-50 border border-slate-200/80 rounded-xl mb-4 overflow-hidden relative transition-all ${
+          isRecording ? "block" : "hidden"
+        }`}
+      >
         <canvas ref={canvasRef} width={600} height={80} className="w-full h-full" />
-        <div className="absolute top-2 right-3 text-xs font-mono font-medium text-blue-700 bg-blue-50/90 px-2 py-0.5 rounded-md border border-blue-200/50">
+        <div className="absolute top-2 right-3 text-xs font-mono font-medium text-blue-700 bg-blue-50/90 px-2.5 py-1 rounded-md border border-blue-200/50 shadow-xs">
           {recordingSeconds.toFixed(1)}s / {TARGET_DURATION}s
         </div>
       </div>
 
       {/* Primary Interaction State */}
       {!audioUrl ? (
-        <div className="flex flex-col items-center py-2">
+        <div className="flex flex-col items-center py-2 sm:py-3 w-full">
           {/* Circular Button with Progress Ring */}
           <div className="relative flex items-center justify-center">
             {isRecording && (
@@ -204,10 +208,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplet
 
             <button
               onClick={isRecording ? stopRecording : startRecording}
-              className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 shadow-md ${
+              className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 shadow-md touch-manipulation ${
                 isRecording
-                  ? "bg-rose-600 hover:bg-rose-700 text-white animate-pulse"
-                  : "bg-blue-600 hover:bg-blue-700 text-white hover:scale-105 active:scale-95"
+                  ? "bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white animate-pulse"
+                  : "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white hover:scale-105 active:scale-95"
               }`}
               title={isRecording ? "Stop Recording" : "Start 8s Voice Recording"}
             >
@@ -215,8 +219,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplet
             </button>
           </div>
 
-          <div className="mt-4 text-center">
-            <div className="text-sm font-medium text-slate-800">
+          <div className="mt-4 text-center px-2">
+            <div className="text-sm font-semibold text-slate-800">
               {isRecording ? "Sustain steady 'Aaah'..." : "Tap to Record Phonation"}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
@@ -226,39 +230,47 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplet
         </div>
       ) : (
         /* Recording Complete Preview & Confirmation */
-        <div className="w-full bg-slate-50 border border-slate-200/80 rounded-xl p-4 flex flex-col gap-3">
+        <div className="w-full bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
                 <Volume2 className="w-4 h-4" />
               </div>
-              <div>
-                <div className="text-xs font-semibold text-slate-800">Recording Captured</div>
-                <div className="text-[11px] text-slate-500">{recordingSeconds.toFixed(1)} seconds duration</div>
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-slate-800 truncate">Recording Captured</div>
+                <div className="text-[11px] text-slate-500">{recordingSeconds.toFixed(1)}s phonation window</div>
               </div>
             </div>
 
-            <audio controls src={audioUrl} className="h-8 max-w-[200px]" />
+            <span className="text-[11px] font-semibold font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200/50">
+              Valid Take
+            </span>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-200/60">
+          {/* Full-width responsive audio player */}
+          <div className="w-full pt-1">
+            <audio controls src={audioUrl} className="w-full h-10 rounded-lg focus:outline-none" />
+          </div>
+
+          {/* Touch-friendly Action Buttons: stack on mobile, row on tablet/desktop */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-slate-200/70">
             <button
               onClick={() => {
                 setAudioUrl(null);
                 setRecordedFile(null);
               }}
-              className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg flex items-center gap-1.5 transition-colors"
+              className="w-full sm:w-auto px-4 py-2.5 min-h-[44px] text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 active:bg-slate-200 border border-slate-200 rounded-xl flex items-center justify-center gap-1.5 transition-colors touch-manipulation"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Re-record
+              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+              <span>Re-record</span>
             </button>
 
             <button
               onClick={handleConfirmTake}
-              className="px-3.5 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors"
+              className="w-full sm:w-auto px-5 py-2.5 min-h-[44px] text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors touch-manipulation"
             >
-              <Check className="w-3.5 h-3.5" />
-              Add to Assessment Queue
+              <Check className="w-4 h-4 shrink-0" />
+              <span>Add to Assessment Queue</span>
             </button>
           </div>
         </div>
@@ -266,3 +278,4 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplet
     </div>
   );
 };
+

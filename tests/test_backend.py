@@ -86,3 +86,4 @@ def test_predict_rejects_empty_file(client):
     res = client.post("/api/v1/predict", files=files)
     assert res.status_code == 400
     assert "0 bytes" in res.json()["detail"]
+

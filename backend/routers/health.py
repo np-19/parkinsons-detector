@@ -27,3 +27,4 @@ def get_health() -> HealthResponse:
 def get_meta_stats() -> MetaStatsResponse:
     """Return clinical Meta-Classifier weights, reference means, stds, and cutoff threshold."""
     return PredictorService.get_meta_stats()
+

@@ -80,3 +80,4 @@ if __name__ == "__main__":
     from backend.config import HOST, PORT
 
     uvicorn.run("backend.main:app", host=HOST, port=PORT, reload=False)
+

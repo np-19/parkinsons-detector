@@ -53,3 +53,4 @@ class HealthResponse(BaseModel):
     device: str
     torch_version: str
     supported_formats: List[str]
+

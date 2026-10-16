@@ -40,3 +40,4 @@ export async function predictPatientRecordings(files: File[]): Promise<Predictio
 
   return res.json();
 }
+
