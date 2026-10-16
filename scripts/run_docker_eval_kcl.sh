@@ -40,3 +40,4 @@ ${DOCKER_BIN} run --gpus all --rm \
     --model-path "${MODEL_PATH}" \
     --crops "${CROPS}" \
     --duration "${DURATION}"
+

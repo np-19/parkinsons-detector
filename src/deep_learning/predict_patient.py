@@ -73,9 +73,17 @@ class PatientPredictor:
         if not path.exists():
             raise FileNotFoundError(f"Audio file not found: {path}")
 
-        waveform, sr = torchaudio.load(str(path))
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(dim=0, keepdim=True)
+        try:
+            waveform, sr = torchaudio.load(str(path))
+            if waveform.shape[0] > 1:
+                waveform = waveform.mean(dim=0, keepdim=True)
+        except Exception:
+            import soundfile as sf
+            data, sr = sf.read(str(path), dtype="float32")
+            if data.ndim > 1:
+                data = data.mean(axis=1)
+            waveform = torch.from_numpy(data).unsqueeze(0)
+
         if sr != self.sample_rate:
             resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=self.sample_rate)
             waveform = resampler(waveform)
