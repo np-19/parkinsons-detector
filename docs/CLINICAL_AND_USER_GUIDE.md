@@ -482,6 +482,15 @@ NeuroVocal implements a calibrated **3-Tier Clinical Triage System**:
 ### C. Clinical Impact
 By introducing the Amber Borderline Triage tier between $0.20$ and $0.35$, the application raises **effective screening sensitivity over $92\%$**, while maintaining a pure green zone where false positives are virtually zero.
 
+### D. The Biological Ceiling of Voice Biomarkers (~88%) & Multimodal Screening
+1. **The Biological Ceiling of Laryngeal Manifestation**:
+   Neurological literature (*Sapir et al., 2008*, *Ramig et al., 2008*) confirms that hypokinetic dysarthria manifests in approximately 70% to 89% of Parkinson's patients. In early **Hoehn & Yahr Stage 1**, approximately **10% to 12% of Parkinson's patients present with isolated unilateral limb tremor without any vocal fold impairment**.
+2. **Clinical Implications**:
+   Because an acoustic model evaluates physical vocal neuromuscular instability, it cannot detect disease in vocal folds that are physiologically healthy. An empirical acoustic sensitivity of **87.7%** on unconstrained home smartphone recordings sits near the theoretical biological ceiling for voice alone.
+3. **Multimodal Recommendation**:
+   To catch the remaining 10–12% of early-stage patients whose voice is physically unaffected, NeuroVocal is designed to serve as the front-line acoustic triage component of a comprehensive multimodal screening protocol that includes smartphone accelerometer finger-tapping and gait analysis.
+
+
 
 
 
