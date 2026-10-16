@@ -16,6 +16,7 @@ data/train/
 data/validation/
 data/test/
 mPower_Audio/
+test_samples/
 
 # Python caches and local tooling
 __pycache__/
