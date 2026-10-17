@@ -65,6 +65,12 @@ def parse_args():
         help="Output CSV path for detailed evaluation metrics",
     )
     parser.add_argument(
+        "--model-path",
+        type=str,
+        default="artifacts/models/deep_learning/wav2vec2_v2/best_model.pt",
+        help="Path to best_model.pt checkpoint to evaluate",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -156,7 +162,8 @@ def main():
     print("--------------------------------------------------------------------------------")
 
     # Initialize PatientPredictor
-    predictor = PatientPredictor(device=device)
+    print(f" Loading model from: {args.model_path}")
+    predictor = PatientPredictor(model_path=args.model_path, device=device)
 
     results = []
     print(f"\n{'Subject ID':<12} | {'Cohort':<6} | {'Files':<5} | {'Mean Rec P':<10} | {'Meta Score':<10} | {'Triage':<11} | {'Result':<12}")
