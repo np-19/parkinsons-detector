@@ -72,6 +72,13 @@ def main():
         help="Optional weights for each model (must sum to 1.0)",
     )
     parser.add_argument(
+        "--method",
+        type=str,
+        default="log-odds",
+        choices=["linear", "log-odds", "rank"],
+        help="Ensemble fusion strategy: 'log-odds' (Bayesian logit average), 'linear', or 'rank'",
+    )
+    parser.add_argument(
         "--output-file",
         type=str,
         default="artifacts/models/deep_learning/ensemble_test_predictions.csv",
@@ -81,26 +88,42 @@ def main():
 
     dfs = [pd.read_csv(f) for f in args.prediction_files]
     num_models = len(dfs)
-    print(f"Ensembling {num_models} models:")
+    print(f"Ensembling {num_models} models using method '{args.method}':")
     for f in args.prediction_files:
         print(f"  - {f}")
 
     if args.weights:
-        weights = np.array(args.weights)
+        weights = np.array(args.weights, dtype=float)
         weights = weights / weights.sum()
     else:
         weights = np.ones(num_models) / num_models
 
+    print(f"Normalized Weights: {[round(float(w), 3) for w in weights]}")
     base_df = dfs[0][["ROW_ID", "healthCode", "label"]].copy()
 
-    # Weighted average recording prob
-    ensemble_rec_prob = np.zeros(len(base_df))
-    for i, df in enumerate(dfs):
-        ensemble_rec_prob += weights[i] * df["prob_PD"].values
+    # Fusion
+    if args.method == "log-odds":
+        ensemble_rec_prob = np.zeros(len(base_df), dtype=float)
+        eps = 1e-6
+        for i, df in enumerate(dfs):
+            p = np.clip(df["prob_PD"].values.astype(float), eps, 1.0 - eps)
+            z = np.log(p / (1.0 - p))
+            ensemble_rec_prob += weights[i] * z
+        ensemble_rec_prob = 1.0 / (1.0 + np.exp(-np.clip(ensemble_rec_prob, -20.0, 20.0)))
+    elif args.method == "rank":
+        ensemble_rec_prob = np.zeros(len(base_df), dtype=float)
+        n = len(base_df)
+        for i, df in enumerate(dfs):
+            ranks = df["prob_PD"].rank().values / n
+            ensemble_rec_prob += weights[i] * ranks
+    else:  # linear
+        ensemble_rec_prob = np.zeros(len(base_df), dtype=float)
+        for i, df in enumerate(dfs):
+            ensemble_rec_prob += weights[i] * df["prob_PD"].values
 
     base_df["prob_PD"] = ensemble_rec_prob
 
-    # Participant aggregation
+    # Participant aggregation (count-invariant arithmetic mean)
     part_df = base_df.groupby("healthCode").agg({
         "label": "first",
         "prob_PD": "mean",
@@ -109,10 +132,13 @@ def main():
     p_true = part_df["label"].values.astype(int)
     p_prob = part_df["prob_PD"].values.astype(float)
 
-    # Search best threshold
-    best_thresh = 0.50
+    # Dynamic threshold search
+    best_thresh = float(np.median(p_prob))
     best_bal_acc = -1.0
-    for t in np.arange(0.30, 0.70, 0.01):
+    sorted_probs = np.sort(p_prob)
+    candidate_thresholds = np.linspace(sorted_probs[15], sorted_probs[-15], 120)
+
+    for t in candidate_thresholds:
         m = compute_metrics(p_true, p_prob, threshold=float(t))
         if m["balanced_accuracy"] > best_bal_acc:
             best_bal_acc = m["balanced_accuracy"]
@@ -129,17 +155,29 @@ def main():
     out_p.parent.mkdir(parents=True, exist_ok=True)
     base_df.to_csv(out_p, index=False)
 
-    print("\n" + "=" * 60)
-    print("              ENSEMBLE EVALUATION RESULTS")
-    print("=" * 60)
-    print(f"Optimal Threshold: {best_thresh:.3f}")
+    report_p = out_p.parent / f"{out_p.stem}_report.json"
+    with open(report_p, "w") as f:
+        json.dump({
+            "models": args.prediction_files,
+            "weights": list(weights),
+            "method": args.method,
+            "optimal_threshold": best_thresh,
+            "participant_level": part_metrics,
+            "recording_level": rec_metrics,
+        }, f, indent=2)
+
+    print("\n" + "=" * 65)
+    print("            COUNT-INVARIANT ENSEMBLE TEST RESULTS")
+    print("=" * 65)
+    print(f"Optimal Threshold:             {best_thresh:.3f}")
     print(f"Participant Balanced Accuracy: {part_metrics['balanced_accuracy'] * 100:.2f}%")
-    print(f"Participant Accuracy:          {part_metrics['accuracy'] * 100:.2f}%")
+    print(f"Participant Raw Accuracy:      {part_metrics['accuracy'] * 100:.2f}%")
     print(f"Participant ROC-AUC:           {part_metrics['roc_auc']:.4f}")
-    print(f"Participant Sensitivity:       {part_metrics['sensitivity'] * 100:.2f}%")
-    print(f"Participant Specificity:       {part_metrics['specificity'] * 100:.2f}%")
+    print(f"Participant Sensitivity:       {part_metrics['sensitivity'] * 100:.2f}% (Catches {part_metrics['confusion_matrix']['tp']}/{part_metrics['confusion_matrix']['tp'] + part_metrics['confusion_matrix']['fn']} PD)")
+    print(f"Participant Specificity:       {part_metrics['specificity'] * 100:.2f}% ({part_metrics['confusion_matrix']['tn']}/{part_metrics['confusion_matrix']['tn'] + part_metrics['confusion_matrix']['fp']} Controls)")
     print(f"Confusion Matrix:              {part_metrics['confusion_matrix']}")
     print(f"\nSaved ensemble predictions to: {out_p}")
+    print(f"Saved ensemble report to:      {report_p}")
 
 
 if __name__ == "__main__":
