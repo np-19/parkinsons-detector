@@ -52,10 +52,10 @@ else:
     sys.exit(1)
 "
 
-# Install missing audio/deep learning dependencies if required
-python3 -c "import soundfile, transformers, accelerate, sklearn, pandas" 2>/dev/null || {
-  echo "Installing required Python packages..."
-  pip install --no-cache-dir soundfile accelerate "transformers>=4.46.0" scikit-learn pandas tqdm
+# Ensure transformers is pinned to 4.46.3 (compatible with PyTorch < 2.5 without false backend errors)
+python3 -c "import soundfile, transformers, accelerate, sklearn, pandas; assert transformers.is_torch_available()" 2>/dev/null || {
+  echo "Installing/fixing required Python packages (transformers==4.46.3)..."
+  pip install --no-cache-dir "transformers==4.46.3" soundfile accelerate scikit-learn pandas tqdm
 }
 
 # --- 4. Dataset Directory Verification ---
