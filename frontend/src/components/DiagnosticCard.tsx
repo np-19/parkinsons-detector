@@ -8,7 +8,8 @@ interface DiagnosticCardProps {
 }
 
 export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset }) => {
-  const scorePercent = Math.min(Math.max(report.meta_classifier_score * 100, 0), 100);
+  const participantScore = report.participant_mean_score ?? report.meta_classifier_score;
+  const scorePercent = Math.min(Math.max(participantScore * 100, 0), 100);
 
   const handlePrint = () => {
     window.print();
@@ -50,7 +51,14 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
 
       {/* Hero Diagnostic Badge with 3-Tier Clinical Triage */}
       {(() => {
-        const triage = report.triage_level || (report.meta_classifier_score < 0.20 ? "LOW_RISK" : report.meta_classifier_score < 0.35 ? "BORDERLINE" : "HIGH_RISK");
+        const screeningCutoff = report.screening_cutoff ?? report.threshold - 0.10;
+        const triage = report.triage_level || (
+          participantScore < screeningCutoff
+            ? "LOW_RISK"
+            : participantScore < report.threshold
+              ? "BORDERLINE"
+              : "HIGH_RISK"
+        );
         
         let badgeBg = "bg-emerald-50/70 border-emerald-200 text-emerald-950";
         let iconBg = "bg-emerald-100 text-emerald-700";
@@ -62,13 +70,13 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
           badgeBg = "bg-amber-50/80 border-amber-300 text-amber-950";
           iconBg = "bg-amber-100 text-amber-700";
           IconComponent = AlertCircle;
-          triageTag = "Borderline Triage (Sensitivity >92%)";
+          triageTag = "Borderline Triage (Review Recommended)";
           triageTagColor = "bg-amber-100 text-amber-900 border-amber-300";
         } else if (triage === "HIGH_RISK") {
           badgeBg = "bg-rose-50/70 border-rose-200 text-rose-950";
           iconBg = "bg-rose-100 text-rose-700";
           IconComponent = AlertTriangle;
-          triageTag = "High Clinical Risk (Definitive Dysphonia)";
+          triageTag = "High Clinical Risk (Acoustic Alert)";
           triageTagColor = "bg-rose-100 text-rose-800 border-rose-200";
         }
 
@@ -96,7 +104,7 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
             <div className="text-right sm:border-l sm:border-slate-200/60 sm:pl-5 shrink-0">
               <div className="text-[11px] uppercase tracking-wider text-slate-500 font-medium">Acoustic Biomarker Score</div>
               <div className="text-2xl font-bold font-mono text-slate-900">
-                {report.meta_classifier_score.toFixed(4)}
+                {participantScore.toFixed(4)}
               </div>
             </div>
           </div>
@@ -105,12 +113,12 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
 
       {/* Calibrated 3-Zone Clinical Probability Scale */}
       {(() => {
-        const screeningCutoff = report.screening_cutoff ?? 0.25;
+        const screeningCutoff = report.screening_cutoff ?? report.threshold - 0.10;
         const balancedCutoff = report.threshold ?? 0.36;
-        const diagnosticCutoff = report.diagnostic_cutoff ?? 0.45;
+        const diagnosticCutoff = report.diagnostic_cutoff ?? report.threshold + 0.10;
 
         const zone1Width = Math.round(screeningCutoff * 100);
-        const zone2Width = Math.round((diagnosticCutoff - screeningCutoff) * 100);
+        const zone2Width = Math.round((balancedCutoff - screeningCutoff) * 100);
         const zone3Width = Math.max(100 - zone1Width - zone2Width, 0);
 
         return (
@@ -129,7 +137,7 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
               {/* Zone 1: Green */}
               <div style={{ width: `${zone1Width}%` }} className="h-full bg-emerald-300/80" title={`Low Risk Zone (<${screeningCutoff.toFixed(2)})`} />
               {/* Zone 2: Amber */}
-              <div style={{ width: `${zone2Width}%` }} className="h-full bg-amber-300/90" title={`Borderline Screening Alert Zone (${screeningCutoff.toFixed(2)}–${diagnosticCutoff.toFixed(2)})`} />
+              <div style={{ width: `${zone2Width}%` }} className="h-full bg-amber-300/90" title={`Borderline Screening Alert Zone (${screeningCutoff.toFixed(2)}–${balancedCutoff.toFixed(2)})`} />
               {/* Zone 3: Red */}
               <div style={{ width: `${zone3Width}%` }} className="h-full bg-rose-300/80" title={`High Risk Zone (≥${diagnosticCutoff.toFixed(2)})`} />
             </div>
@@ -142,7 +150,7 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
               >
                 <div className="w-2.5 h-2.5 rounded-full bg-slate-900 ring-2 ring-white shadow-sm" />
                 <div className="text-[10px] font-bold font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded shadow-xs border border-slate-200 -mt-0.5 whitespace-nowrap">
-                  {report.meta_classifier_score.toFixed(3)}
+                  {participantScore.toFixed(3)}
                 </div>
               </div>
             </div>
@@ -154,11 +162,11 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
                 <div className="text-[10px] text-slate-400">Low Risk (Healthy)</div>
               </div>
               <div className="text-center text-amber-800">
-                <span className="font-semibold">{screeningCutoff.toFixed(2)} – {diagnosticCutoff.toFixed(2)}</span>
+                <span className="font-semibold">{screeningCutoff.toFixed(2)} – {balancedCutoff.toFixed(2)}</span>
                 <div className="text-[10px] text-slate-400">Borderline / ON-State Alert</div>
               </div>
               <div className="text-right text-rose-800">
-                <span className="font-semibold">{diagnosticCutoff.toFixed(2)} – 1.00</span>
+                <span className="font-semibold">{balancedCutoff.toFixed(2)} – 1.00</span>
                 <div className="text-[10px] text-slate-400">High Risk (Dysphonic)</div>
               </div>
             </div>

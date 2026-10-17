@@ -39,7 +39,8 @@ app = FastAPI(
     title="NeuroVocal API | Parkinson's Acoustic Screening Engine",
     description=(
         "Production-grade clinical decision support API for speech-based Parkinson's Disease detection. "
-        "Powered by fine-tuned Wav2Vec 2.0 (mPower benchmark) with 10-moment longitudinal Meta-Classification."
+        "Powered by fine-tuned Wav2Vec 2.0 (mPower benchmark) with count-invariant arithmetic-mean "
+        "participant aggregation."
     ),
     version="2.0.0",
     lifespan=lifespan,
@@ -80,4 +81,3 @@ if __name__ == "__main__":
     from backend.config import HOST, PORT
 
     uvicorn.run("backend.main:app", host=HOST, port=PORT, reload=False)
-

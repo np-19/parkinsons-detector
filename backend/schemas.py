@@ -9,7 +9,10 @@ class RecordingResult(BaseModel):
     filename: str = Field(..., description="Original name of the uploaded audio file")
     duration_seconds: float = Field(..., description="Duration of the audio recording in seconds")
     probability_pd: float = Field(..., ge=0.0, le=1.0, description="Raw deep learning acoustic probability of Parkinson's")
-    recording_status: str = Field(..., description="Local status: 'Normal Phonation' or 'Dysarthric / Tremor'")
+    recording_status: str = Field(
+        ...,
+        description="Local status using the checkpoint-selected acoustic threshold",
+    )
 
 
 class StatisticalDistribution(BaseModel):
@@ -29,10 +32,21 @@ class PredictionResponse(BaseModel):
     triage_level: str = Field(default="LOW_RISK", description="'LOW_RISK', 'BORDERLINE', or 'HIGH_RISK'")
     triage_recommendation: str = Field(default="", description="Actionable clinical next steps and follow-up guidance")
     confidence_level: str = Field(..., description="Stratified clinical confidence tier")
-    meta_classifier_score: float = Field(..., ge=0.0, le=1.0, description="Standardized multi-moment Meta-Classifier score")
+    participant_mean_score: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Arithmetic mean of recording-level Parkinson's probabilities",
+    )
+    meta_classifier_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Deprecated compatibility alias for participant_mean_score",
+    )
     threshold: float = Field(default=0.36, description="Balanced diagnostic cutoff threshold")
-    screening_cutoff: float = Field(default=0.25, description="Screening triage threshold (>80% Sensitivity)")
-    diagnostic_cutoff: float = Field(default=0.45, description="High-specificity diagnostic threshold (>85% Specificity)")
+    screening_cutoff: float = Field(default=0.26, description="Screening triage cutoff derived from the checkpoint threshold")
+    diagnostic_cutoff: float = Field(default=0.46, description="Diagnostic triage cutoff derived from the checkpoint threshold")
     recordings_analyzed: int = Field(..., description="Count of recordings analyzed")
     distribution: StatisticalDistribution = Field(..., description="Statistical distribution metrics")
     recordings: List[RecordingResult] = Field(..., description="Breakdown of each recording evaluated")
@@ -41,12 +55,18 @@ class PredictionResponse(BaseModel):
 
 
 class MetaStatsResponse(BaseModel):
-    """Reference statistics used by the Clinical Aggregator."""
+    """Threshold and aggregation configuration used by patient inference."""
     threshold: float = 0.36
-    weights: List[float]
-    reference_means: List[float]
-    reference_stds: List[float]
-    bias: float
+    screening_cutoff: float = 0.26
+    diagnostic_cutoff: float = 0.46
+    aggregation: str = "arithmetic_mean"
+    score_field: str = "participant_mean_score"
+    model_version: str = "Wav2Vec2_v2 (mPower)"
+    # Deprecated compatibility fields retained for existing API consumers.
+    weights: List[float] = Field(default_factory=list)
+    reference_means: List[float] = Field(default_factory=list)
+    reference_stds: List[float] = Field(default_factory=list)
+    bias: float = 0.0
 
 
 class HealthResponse(BaseModel):
@@ -57,4 +77,3 @@ class HealthResponse(BaseModel):
     device: str
     torch_version: str
     supported_formats: List[str]
-

@@ -217,9 +217,9 @@ class WaveLMForParkinsons(nn.Module):
     """Fine-tuned WaveLM model for Parkinson's disease classification.
 
     WaveLM (e.g. microsoft/wavelm-base-plus) was pretrained on 60,000 hours of
-    speech with masked speech denoising and restoration, capturing fine-grained
-    acoustic pathology (micro-tremor, breathiness, phonatory instabilities)
-    superior to phoneme-focused speech recognition backbones.
+    speech with masked speech denoising and restoration. Its suitability for
+    fine-grained Parkinson's acoustic markers is a hypothesis to be evaluated
+    against the validated Wav2Vec2 baseline, not an established advantage.
     """
 
     def __init__(
@@ -366,5 +366,4 @@ def build_speech_model(
         clean_model_name = model_name.replace("wavelm", "wavlm").replace("WaveLM", "WavLM")
         return WaveLMForParkinsons(model_name=clean_model_name, **kwargs)
     return Wav2Vec2ForParkinsons(model_name=model_name, **kwargs)
-
 

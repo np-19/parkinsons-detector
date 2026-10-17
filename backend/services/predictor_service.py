@@ -16,10 +16,10 @@ from backend.schemas import (
     StatisticalDistribution,
 )
 from src.deep_learning.predict_patient import (
+    ACOUSTIC_OPTIMAL_THRESHOLD,
     META_BIAS,
     META_MEANS,
     META_STDS,
-    META_THRESHOLD,
     META_WEIGHTS,
     PatientPredictor,
 )
@@ -133,6 +133,7 @@ class PredictorService:
                 triage_level=triage_level,
                 triage_recommendation=triage_recommendation,
                 confidence_level=confidence_level,
+                participant_mean_score=score,
                 meta_classifier_score=score,
                 threshold=balanced_cutoff,
                 screening_cutoff=screening_cutoff,
@@ -149,12 +150,24 @@ class PredictorService:
 
     @staticmethod
     def get_meta_stats() -> MetaStatsResponse:
-        """Return reference statistical parameters used by the clinical Meta-Classifier."""
+        """Return the production participant-score aggregation configuration."""
+        predictor = PredictorService.get_instance().predictor
+        threshold = (
+            predictor.optimal_threshold
+            if predictor is not None
+            else ACOUSTIC_OPTIMAL_THRESHOLD
+        )
+        screening_cutoff = max(0.15, threshold - 0.10)
+        diagnostic_cutoff = min(0.85, threshold + 0.10)
         return MetaStatsResponse(
-            threshold=META_THRESHOLD,
+            threshold=threshold,
+            screening_cutoff=screening_cutoff,
+            diagnostic_cutoff=diagnostic_cutoff,
+            aggregation="arithmetic_mean",
+            score_field="participant_mean_score",
+            model_version="Wav2Vec2_v2 (mPower)",
             weights=META_WEIGHTS,
             reference_means=META_MEANS,
             reference_stds=META_STDS,
             bias=META_BIAS,
         )
-

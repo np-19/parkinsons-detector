@@ -20,6 +20,7 @@ export interface PredictionResponse {
   triage_level?: "LOW_RISK" | "BORDERLINE" | "HIGH_RISK";
   triage_recommendation?: string;
   confidence_level: string;
+  participant_mean_score?: number;
   meta_classifier_score: number;
   threshold: number;
   screening_cutoff?: number;

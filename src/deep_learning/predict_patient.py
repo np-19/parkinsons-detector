@@ -1,9 +1,8 @@
-"""Patient-Level Parkinson's Detection Inference Pipeline.
+"""Patient-level Parkinson's detection inference pipeline.
 
 Takes one or more sustained vowel audio recordings for a patient, runs
-Wav2Vec 2.0 acoustic inference with Test-Time Augmentation (TTA), extracts
-the multi-recording statistical distribution, and outputs a clinical
-diagnosis using the Participant-Level Meta-Classifier.
+Wav2Vec 2.0 acoustic inference with Test-Time Augmentation (TTA), averages
+the recording probabilities, and outputs a clinical screening triage result.
 """
 
 import argparse
@@ -28,8 +27,8 @@ def dot(w: List[float], x: List[float]) -> float:
 
 # Validation-selected decision thresholds and reference constants
 ACOUSTIC_OPTIMAL_THRESHOLD = 0.360
-SCREENING_CUTOFF = 0.250
-DIAGNOSTIC_CUTOFF = 0.450
+SCREENING_CUTOFF = 0.260
+DIAGNOSTIC_CUTOFF = 0.460
 
 # Backward-compatibility reference exports for API endpoints
 META_WEIGHTS = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -58,6 +57,9 @@ class PatientPredictor:
 
         checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
         config = checkpoint.get("config", {})
+        self.duration = float(config.get("duration", duration))
+        self.sample_rate = int(config.get("sample_rate", sample_rate))
+        self.target_length = int(self.duration * self.sample_rate)
         model_name = config.get("model_name", "facebook/wav2vec2-base")
         print(f"Loading speech model '{model_name}' from: {model_path} (on {self.device})...")
         from src.deep_learning.model import build_speech_model
@@ -78,7 +80,7 @@ class PatientPredictor:
         self.optimal_threshold = float(checkpoint.get("optimal_threshold", ACOUSTIC_OPTIMAL_THRESHOLD))
 
     def load_audio(self, audio_path: Union[str, Path]) -> torch.Tensor:
-        """Load and preprocess audio to 16 kHz mono waveform with peak normalization."""
+        """Load and preprocess audio to the checkpoint sample rate in mono."""
         path = Path(audio_path)
         if not path.exists():
             raise FileNotFoundError(f"Audio file not found: {path}")
@@ -144,7 +146,11 @@ class PatientPredictor:
                     "file": str(path),
                     "duration_seconds": round(waveform.shape[0] / self.sample_rate, 2),
                     "probability_PD": round(prob, 4),
-                    "recording_status": "Dysarthric / Tremor" if prob >= 0.360 else "Normal Phonation",
+                    "recording_status": (
+                        "Dysarthric / Tremor"
+                        if prob >= self.optimal_threshold
+                        else "Normal Phonation"
+                    ),
                 })
             except Exception as e:
                 print(f"Warning: Failed to process {path}: {e}", file=sys.stderr)
@@ -214,6 +220,8 @@ class PatientPredictor:
             "is_parkinsons": is_pd,
             "triage_level": triage_level,
             "triage_recommendation": triage_rec,
+            # Keep the legacy key for clients that still consume API v2.0.
+            "participant_mean_score": round(participant_score, 4),
             "meta_classifier_score": round(participant_score, 4),
             "meta_threshold": balanced_threshold,
             "screening_cutoff": screening_cutoff,
@@ -251,9 +259,16 @@ def main():
     print("      PARKINSON'S ACOUSTIC SCREENING REPORT")
     print("=" * 65)
     print(f"  Final Diagnosis:      {report['participant_verdict']}")
-    print(f"  Clinical Triage:      {report['triage_level']} (Sens >92% Alert: ≥0.20 | Definite: ≥0.35)")
+    print(
+        f"  Clinical Triage:      {report['triage_level']} "
+        f"(Screening: <{report['screening_cutoff']:.3f} | "
+        f"Diagnostic: ≥{report['diagnostic_cutoff']:.3f})"
+    )
     print(f"  Confidence Level:     {report['confidence_level']}")
-    print(f"  Meta-Classifier Score:{report['meta_classifier_score']:.4f} (Balanced Cutoff: {report['meta_threshold']})")
+    print(
+        f"  Participant Mean:     {report['participant_mean_score']:.4f} "
+        f"(Decision Threshold: {report['meta_threshold']:.3f})"
+    )
     print(f"  Recordings Analyzed:  {report['recordings_analyzed']}")
     print("-" * 65)
     print(f"  Triage Recommendation: {report['triage_recommendation']}")
@@ -278,4 +293,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -6,6 +6,12 @@ This repository contains the end-to-end deep learning pipeline for detecting Par
 * **Held-Out Test Participant Balanced Accuracy**: **`74.72%`** (ROC-AUC: **`0.8245`**, Sensitivity: 78.08%, Specificity: 71.36% on 579 unseen test participants)
 * **External Multi-Cohort Cross-Dataset Generalization**: **`75.00%`** balanced accuracy (86.36% PD sensitivity, 95.2% MSA detection) on an independent external clinical cohort (`records` dataset: PD, Healthy Controls, MSA, PSP)
 
+The production score is the arithmetic mean of recording-level probabilities. The
+validation-selected checkpoint threshold is loaded from the checkpoint at
+inference time; the default checkpoint uses $\tau = 0.360$, with screening and
+diagnostic triage cutoffs derived as $\tau - 0.10 = 0.260$ and
+$\tau + 0.10 = 0.460$.
+
 ---
 
 ## Clinical Performance Hierarchy
@@ -57,8 +63,8 @@ This repository contains the end-to-end deep learning pipeline for detecting Par
 │  - Aggregation: Arithmetic Mean P_mean = (1/N) sum(P_i)  │
 │  - Validation-Calibrated Decision Threshold: 0.360       │
 │  - 3-Tier Clinical Triage:                               │
-│      * Low Risk: P < 0.25 (Normal voice dynamics)        │
-│      * Borderline: 0.25 <= P < 0.36 (Screening Alert)    │
+│      * Low Risk: P < 0.260 (Normal voice dynamics)       │
+│      * Borderline: 0.260 <= P < 0.36 (Screening Alert)   │
 │      * High Risk: P >= 0.36 (Manifest Dysphonia)         │
 └──────────────────────────────────────────────────────────┘
                            │
@@ -205,7 +211,5 @@ Test any audio file directly from the terminal without opening the web browser:
 ### Core API Endpoints
 
 * `GET /api/health`: Health status, active hardware device (`cuda` or `cpu`), and supported audio formats.
-* `GET /api/v1/meta-stats`: Exposes 10-moment reference statistics and the clinical decision boundary ($0.29$).
-* `POST /api/v1/predict`: Accepts $1$ to $N$ voice recordings (`.wav`, `.ogg`, `.m4a`, `.webm`), extracts Wav2Vec 2.0 embeddings, computes meta-features, and returns structured diagnosis JSON.
-
-
+* `GET /api/v1/meta-stats`: Returns the active checkpoint threshold, derived triage cutoffs, and the production `arithmetic_mean` aggregation configuration. Legacy reference-statistic fields remain only as a migration aid for older clients.
+* `POST /api/v1/predict`: Accepts $1$ to $N$ voice recordings (`.wav`, `.ogg`, `.m4a`, `.webm`), extracts Wav2Vec 2.0 probabilities, averages them as `participant_mean_score`, and returns structured screening triage JSON. The legacy `meta_classifier_score` field is retained as an alias.

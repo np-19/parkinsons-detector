@@ -11,7 +11,7 @@
 | **Primary Goal** | Non-invasive early detection of Parkinson's Disease (PD) from sustained vowel speech recordings. |
 | **Dataset** | mPower Mobile Parkinson Study (Sage Bionetworks, *Nature Biotechnology*). |
 | **Scale** | 9,986 audio recordings across 3,868 real-world participants. |
-| **Partitioning** | **Strict Participant-Level Isolation**: Train (2,707), Validation (580), Test (581). Zero cross-split leakage. |
+| **Partitioning** | **Strict Participant-Level Isolation**: Assigned split sizes are Train (2,707), Validation (580), Test (581). The current evaluated test report contains 579 participants after audio-processing/evaluation exclusions; these counts must not be conflated. |
 | **Core Architecture** | Pretrained `wav2vec2-base` (8 unfrozen layers) + Temporal Attention Pooling + Count-Invariant Triage. |
 | **Grounded Performance** | **`80.09%` Validation Balanced Accuracy** (`0.8665` ROC-AUC); **`74.72%` Held-Out Test Balanced Accuracy** (`0.8245` ROC-AUC); **`75.00%` External Multi-Cohort Generalization** (`86.36%` PD sensitivity). |
 
@@ -53,8 +53,8 @@
 ├── Aggregation: Arithmetic Mean P_mean = (1/N) sum(P_i)
 ├── Decision Threshold: tau = 0.360 (Validation-Calibrated)
 └── 3-Tier Clinical Triage:
-    ├── Low Risk (P < 0.25): Normal Voice Dynamics
-    ├── Borderline (0.25 <= P < 0.36): Screening Alert / Potential ON-State Mask
+    ├── Low Risk (P < 0.260): Normal Voice Dynamics
+    ├── Borderline (0.260 <= P < 0.36): Screening Alert / Potential ON-State Mask
     └── High Risk (P >= 0.36): Manifest Parkinsonian Dysphonia
               │
               ▼
@@ -110,7 +110,7 @@
 > * When applying our **Clinical Top-2 Aggregation** (which accounts for diurnal medication cycles across takes), **Sensitivity jumps to `86.99%`** (127 of 146 true PD patients detected, reducing false negatives from 32 down to only 19!).
 
 ### Q3: "What is your clinical recommendation based on this finding?"
-> **Answer**: We recommend a **Multi-Session Screening Protocol**: patients must record 2 to 3 voice samples over 24–48 hours (e.g., morning before taking morning medication, and evening when medication wears off). This completely overcomes transient pharmacological masking.
+> **Answer**: We recommend considering a **multi-session screening protocol**: patients can record 2 to 3 voice samples over 24–48 hours (e.g., morning before taking morning medication, and evening when medication wears off). This may expose medication-state variation, but its clinical benefit requires independent validation and does not overcome masking in every case.
 
 ### Q4: "Why did you use 8.0-second windows instead of the full audio?"
 > **Answer**: 
@@ -329,5 +329,3 @@ To inspect the clinical test report:
 ```bash
 cat artifacts/models/deep_learning/wav2vec2_v2/meta_classifier_report.json
 ```
-
-

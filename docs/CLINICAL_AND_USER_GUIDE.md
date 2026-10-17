@@ -6,12 +6,12 @@
 
 ## 1. Executive Summary & Clinical Performance
 
-Our Parkinson's Disease detection pipeline operates on raw voice waveforms (sustained phonation of the vowel `/a/`). Evaluated on the held-out test split of the **mPower Mobile Parkinson Study** (579 participants, 1,480 recordings, 100% strict participant separation with zero data leakage):
+Our Parkinson's Disease detection pipeline operates on raw voice waveforms (sustained phonation of the vowel `/a/`). Evaluated on the held-out test split of the **mPower Mobile Parkinson Study** (579 evaluated participants, 1,480 recordings, 100% strict participant separation with zero data leakage):
 
 | Tier | Evaluation Level | Method / Strategy | Balanced Accuracy | Raw Accuracy | ROC-AUC | Clinical Role |
 | :---: | :--- | :--- | :---: | :---: | :---: | :--- |
 | **0** | **Recording-Level (Test)** | Single-crop Wav2Vec 2.0 Acoustic Model | **71.22%** | 71.22% | 0.7853 | Baseline perceptual acoustic feature extraction. |
-| **1** | **Participant-Level (Test)** | Count-Invariant Mean ($\tau = 0.360$) | **74.72%** | 73.06% | **0.8245** | Production pipeline: unbiased probability averaging. |
+| **1** | **Participant-Level (Test)** | Count-Invariant Mean ($\tau = 0.360$) | **74.72%** | 73.06% | **0.8245** | Production pipeline: arithmetic-mean probability averaging that does not explicitly use recording count as a feature. |
 | **2** | **Participant-Level (Val)** | Validation-Calibrated Mean ($\tau = 0.360$) | **80.09%** | 79.79% | **0.8665** | Checkpoint selection benchmark (580 unseen participants). |
 | **Ext** | **Cross-Cohort (Zero-Shot)** | Raw sustained `/a/` phonation (`records`) | **75.00%** | 75.00% | — | Generalization across independent clinical institutions. |
 | *Clin* | *Clinical Top-2 (Test)* | *Medication-Aware Top-2 Takes* | *81.83%* | *79.27%* | *0.8985* | *Sensitivity-optimized clinical multi-take protocol.* |
@@ -30,8 +30,8 @@ Patients manage symptoms using dopaminergic replacement therapy (principally **L
 
 ### B. The 3-Tier Clinical Triage Strategy
 Because a single recording might happen during an "ON" state, NeuroVocal employs a stratified 3-tier clinical decision support framework:
-1. **Low Risk ($P < 0.25$)**: Normal voice dynamics and vocal stability.
-2. **Borderline Screening Alert ($0.25 \le P < 0.36$)**: Sensitivity-optimized gate. Flags patients with subtle vocal tremor or potential medication "ON-state" masking for a morning pre-dose re-test or neurological consultation.
+1. **Low Risk ($P < 0.260$)**: Normal voice dynamics and vocal stability.
+2. **Borderline Screening Alert ($0.260 \le P < 0.36$)**: Sensitivity-optimized gate. Flags patients with subtle vocal tremor or potential medication "ON-state" masking for a morning pre-dose re-test or neurological consultation.
 3. **High Risk ($P \ge 0.36$)**: Manifest Parkinsonian dysphonia and phonatory tremor; specialist neurology referral advised.
 
 ### C. The Adherence Confounder & Count-Invariant Aggregation
@@ -60,7 +60,8 @@ To eliminate this shortcut and ensure healthy individuals who take multiple samp
 
 ## 4. Standard Operating Procedure (SOP): How to Best Use This App
 
-To achieve maximum clinical diagnostic accuracy (>91%) in real-world deployment, follow this Standard Operating Procedure:
+For consistent research-grade screening, follow this Standard Operating Procedure. The
+steps below are collection guidance, not a claim of diagnostic accuracy:
 
 ### Step 1: Acoustic Environment & Hardware Placement
 1. **Quiet Environment**: Test in an enclosed room with ambient noise $<45\text{ dBA}$ (avoid air conditioners, open windows, or background speech).
@@ -79,7 +80,9 @@ To achieve maximum clinical diagnostic accuracy (>91%) in real-world deployment,
   - **Sample 1 (Morning "OFF" state)**: First thing in the morning, **before** taking the morning dose of Levodopa.
   - **Sample 2 (Peak "ON" state)**: 1.5 to 2 hours after medication.
   - **Sample 3 (Evening Wearing-Off)**: Before the evening dose.
-- When $\ge 2$ recordings are analyzed, the system's sensitivity jumps to **`91.6%`**.
+- Multiple recordings may reduce sensitivity to medication-state variation, but the
+  magnitude of any improvement must be validated on an independent cohort; this
+  guide does not claim a 91.6% sensitivity increase.
 
 ---
 
@@ -104,7 +107,7 @@ python3 src/deep_learning/predict_patient.py \
 =================================================================
   Final Diagnosis:      POSITIVE (Parkinsonian Dysphonia Detected)
   Confidence Level:     High Confidence Positive
-  Meta-Classifier Score:0.8741 (Threshold: 0.29)
+  Participant Mean:     0.8741 (Decision Threshold: 0.36)
   Recordings Analyzed:  3
 -----------------------------------------------------------------
   Statistical Distribution:
@@ -134,7 +137,7 @@ python3 src/deep_learning/predict_patient.py patient_sample1.wav --json
 ```python
 from src.deep_learning.predict_patient import PatientPredictor
 
-# Initialize the pipeline (loads Model 2 + Meta-Classifier)
+# Initialize the pipeline (loads the validated acoustic model)
 predictor = PatientPredictor(
     model_path="artifacts/models/deep_learning/wav2vec2_v2/best_model.pt",
     device="cuda",  # or "cpu"
@@ -145,7 +148,7 @@ audio_files = ["sample_morning.wav", "sample_evening.wav"]
 result = predictor.predict_patient(audio_files)
 
 print("Diagnosis:", result["participant_verdict"])
-print("Meta-Score:", result["meta_classifier_score"])
+print("Participant mean:", result["participant_mean_score"])
 print("Warnings:", result["clinical_warnings"])
 ```
 
@@ -165,10 +168,11 @@ python3 src/deep_learning/meta_classifier.py --v2-predictions artifacts/models/d
 
 ---
 
-## 7. Real-World Diagnostic Accuracy: Single vs. Multi-Recording Analysis
+## 7. Research Evaluation Limits and Multi-Recording Guidance
 
-A crucial practical question for healthcare practitioners and app users is:
-> *"What is the real-world probability of this app predicting correctly on a **single new recording**, provided medicine and recording conditions are followed?"*
+A single new recording can be affected by medication state, room acoustics,
+microphone processing, and phonation quality. The reported benchmark results
+should not be converted into patient-specific accuracy guarantees.
 
 ### A. Real-World Performance Breakdown (Single Recording)
 
@@ -176,32 +180,34 @@ If the patient strictly follows the clinical protocol (morning unmedicated "OFF"
 
 | Subject Condition | Clinical State | Single-Recording Accuracy | Acoustic Mechanism |
 | :--- | :--- | :---: | :--- |
-| **Parkinson's Patient** | **Unmedicated ("OFF" state)** *(e.g. morning pre-dose)* | **`86% to 92%`** | Phonation micro-tremors (4–7 Hz), hypophonia, and rigidity are unmasked; Wav2Vec 2.0 flags dysarthria with high probability ($P > 0.65$). |
-| **Parkinson's Patient** | **Medicated ("ON" state)** *(1–2 hrs post-dose)* | **`~40% to 55%`** | Pharmacological dopamine replacement temporarily normalizes vocal fold kinetics, masking the disease. |
-| **Healthy Individual** | **Standard Quiet Room** *(Proper distance)* | **`78% to 84%`** | Phonation is steady; model predicts negative ($P < 0.30$). |
-| **Healthy Individual** | **Mild Congestion / Throat Tickle / Room Echo** | **`~70% to 75%`** | Brief vocal fry or acoustic reverberation can cause a momentary false alarm. |
+| **Held-out participant test set** | Count-invariant mean | **74.72% balanced accuracy** | 579 evaluated participants; the production benchmark. |
+| **Validation participant set** | Validation-calibrated mean | **80.09% balanced accuracy** | 580 unseen validation participants; used for checkpoint/threshold selection. |
+| **External cohort** | Raw sustained `/a/` phonation | **75.00% balanced accuracy** | Independent cross-cohort evaluation; small cohort. |
 
-* **Overall Single-Recording Balanced Accuracy (Under Strict Clinical Conditions)**: **`~83% to 86%`**.
+These cohort-level results are not clinical diagnostic accuracy guarantees for
+an individual recording or patient.
 
-### B. Why Does a Single Recording Have an 83–86% Real-World Ceiling?
+### B. Why Can a Single Recording Vary?
 Even when medicine conditions are strictly adhered to, single-shot acoustic testing faces three physical constraints:
 1. **Breath Capacity Limits**: An elderly patient may run out of air at 4–5 seconds; the trailing vocal fry sounds breathy and can distort single-snapshot estimation.
 2. **Transient Throat Dynamics**: A healthy individual with morning vocal dryness can have momentary perturbation ($P = 0.40$), which resolves within hours.
 3. **Smartphone AGC (Automatic Gain Control)**: Phone microphones dynamically adjust gain in quiet rooms, slightly shifting background noise floors.
 
-### C. The "Power of Two": Why 2 Samples Jump to 91.2%
-Requiring **just two voice recordings** (16 seconds of total patient time over 24 hours, e.g., morning and afternoon) resolves single-shot ambiguity:
+### C. Multiple Samples as a Future Validation Hypothesis
+Requiring **two or more voice recordings** (for example, morning and afternoon)
+may reduce single-shot ambiguity, but the production mean pipeline has not
+established a 91.2% performance guarantee:
 
-$$\text{Single Recording (Unmedicated)} \approx \mathbf{84\%} \xrightarrow{\text{Add 1 Follow-up Confirmation Sample}} \text{Two Recordings} \approx \mathbf{91.2\%}$$
+$$\text{Single Recording} \xrightarrow{\text{Add follow-up samples}} \text{Potentially more robust estimate; independent validation required}$$
 
-* **Healthy Controls**: A momentary morning tickle ($P = 0.42$) does not repeat on the afternoon recording ($P = 0.12$). The Meta-Classifier recognizes this transient inconsistency and clears the patient, pushing specificity to **`98.85%`** (only 5 false alarms out of 433 controls).
-* **PD Patients**: Even if one sample was taken near medication onset, the second unmedicated sample captures the true tremor. In our test split, **124 out of 131 true PD patients (94.66%)** produced a decisive positive score across two samples.
+* Multiple recordings can expose variation across medication states, but the
+  size of any benefit depends on the cohort and collection protocol.
 
 ### D. Automated Clinical Risk Stratification in `predict_patient.py`
 The inference engine categorizes single and multi-sample recordings into actionable clinical tiers:
-- **Decisive Positive ($P \ge 0.70$)**: High Confidence Positive ($>92\%$ certainty of parkinsonian dysphonia).
-- **Decisive Negative ($P \le 0.15$)**: High Confidence Negative ($>90\%$ certainty of healthy phonation).
-- **Borderline ($0.25 \le P \le 0.45$)**: Generates an automated clinical advisory prompt recommending a second confirmation sample 24 hours later.
+- **High risk ($P \ge \tau$)**: Uses the checkpoint-selected participant threshold.
+- **Low risk ($P < \tau - 0.10$)**: Below the derived screening cutoff.
+- **Borderline ($\tau - 0.10 \le P < \tau$)**: Generates an advisory prompt recommending clinical review or additional samples.
 
 ---
 
@@ -249,11 +255,17 @@ The deep learning inference stack decouples the neural graph definition, the ser
 
 ---
 
-## 9. Mathematical Mechanics of the Meta-Classifier
+## 9. Mathematical Mechanics of the Exploratory Meta-Classifier Ablation
 
-The system uses a **two-stage hybrid design**:
+The material in this section documents a **non-production exploratory ablation**.
+It is not used by `predict_patient.py` or `/api/v1/predict`, and its result must
+not be presented as an independent estimate of the production model. The
+production pipeline uses the arithmetic mean of recording probabilities and the
+checkpoint-selected threshold described in Sections 1–5.
+
+The historical two-stage experiment used:
 * **Stage 1 (Deep Learning)**: Evaluates acoustic micro-structure in individual audio crops ($71.96\%$ recording-level balanced accuracy).
-* **Stage 2 (Logistic Regression Meta-Classifier)**: Evaluates longitudinal distributional moments to eliminate Levodopa dilution and diurnal noise ($91.20\%$ patient-level balanced accuracy).
+* **Stage 2 (Logistic Regression Meta-Classifier)**: Evaluated longitudinal distributional moments in an exploratory test-cohort ablation. Its apparent performance is affected by recording-count/adherence confounding and is not a production performance claim.
 
 ### A. Multiple Recordings ($N \ge 2$)
 From sorted recording probabilities $P_{(1)} \le P_{(2)} \le \dots \le P_{(N)}$, 10 moments are extracted:
@@ -264,16 +276,16 @@ $$\text{Logit} = \sum_{j=1}^{10} w_j \left(\frac{f_j - \mu_j^{\text{ref}}}{\sigm
 $$\text{Meta-Score} = \frac{1}{1 + e^{-\text{Logit}}}$$
 $$\text{Decision} = \begin{cases} \text{POSITIVE}, & \text{if Meta-Score} \ge 0.29 \\ \text{NEGATIVE}, & \text{if Meta-Score} < 0.29 \end{cases}$$
 
-#### Dual-Threshold Architecture: $\tau_{\text{base}} = 0.360$ vs. $\tau_{\text{meta}} = 0.290$
-The pipeline operates with two distinct, mathematically decoupled decision thresholds:
+#### Historical thresholds (ablation only)
+The historical experiment used two thresholds, but they do not describe the current API:
 1. **Acoustic Base Model Threshold ($\tau_{\text{base}} = 0.360$)**:
    * Evaluates individual $8.0\text{s}$ audio clips.
    * If an individual take has $P_{\text{rec}} \ge 0.360$, its local status is flagged as **`Dysarthric / Tremor`**; otherwise **`Normal Phonation`**.
    * Calibrated during validation epoch checkpointing to maximize clip-level balanced accuracy ($71.96\%$).
-2. **Clinical Meta-Classifier Threshold ($\tau_{\text{meta}} = 0.290$)**:
+2. **Exploratory Meta-Classifier Threshold ($\tau_{\text{meta}} = 0.290$)**:
    * Evaluates the aggregated 10-moment longitudinal patient distribution.
    * Calibrated via out-of-fold grid search ($t \in [0.15, 0.80]$) across all 579 participants to maximize patient-level Youden's Index ($91.20\%$ balanced accuracy, $83.56\%$ sensitivity, $98.85\%$ specificity).
-   * A default $0.50$ threshold is inappropriate in medical screening because it assumes equal error costs. At $0.50$, sensitivity drops to ~65% (missing early-stage patients). The $0.29$ threshold balances sensitivity while maintaining high specificity (only 5 false alarms out of 433 controls).
+   * This threshold is retained here only to make the historical ablation reproducible; it is not returned or used by the production API.
 
 ### B. Single Recording ($N = 1$) & The Zero-Variance Derivation
 
@@ -503,9 +515,3 @@ To verify real-world deployment robustness, NeuroVocal was evaluated on an unsee
 3. **Selective Detection of Atypical Parkinsonism**:
    - **Multiple System Atrophy (MSA)**: Flagged at **95.2%** (20/21 subjects) for manifest dysphonia, accurately reflecting the severe laryngeal abductor paresis and stridor characteristic of MSA.
    - **Progressive Supranuclear Palsy (PSP)**: Flagged at **55.6%** (10/18 subjects), reflecting predominantly supranuclear motor speech involvement rather than primary vocal fold abductor paresis.
-
-
-
-
-
-

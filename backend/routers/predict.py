@@ -36,8 +36,8 @@ def _validate_file(file: UploadFile) -> str:
     summary="Evaluate One or More Patient Voice Recordings",
     description=(
         "Upload one or more audio files (sustained vowel 'aaah'). Evaluates each file using the fine-tuned "
-        "Wav2Vec 2.0 acoustic model with 5-crop Test-Time Augmentation, then applies the 10-moment clinical "
-        "Meta-Classifier to produce the final patient-level diagnosis."
+        "Wav2Vec 2.0 acoustic model with 5-crop Test-Time Augmentation, then averages recording-level "
+        "probabilities to produce the final participant-level screening triage."
     ),
 )
 async def predict_recordings(
@@ -98,4 +98,3 @@ async def predict_single_recording(
     ),
 ) -> PredictionResponse:
     return await predict_recordings(files=[file])
-
