@@ -420,25 +420,28 @@ The user interface (`frontend/src/`) is designed around clinical authority, calm
 
 #### Option 1: Full-Stack Docker Compose (Production Standard)
 ```bash
-# Build and run both backend and frontend as background daemons
-sudo docker compose up -d --build backend frontend
+# Start full stack via unified runner (defaults to CPU mode):
+./scripts/run_docker.sh
+
+# Or run with NVIDIA GPU acceleration (with automatic CPU fallback):
+./scripts/run_docker.sh gpu
 
 # Check status
-sudo docker compose ps
+docker compose ps
 
 # View live backend logs
-sudo docker compose logs -f backend
+docker compose logs -f
 
 # Stop the services
-sudo docker compose down
+./scripts/run_docker.sh down
 ```
 * **Frontend UI**: `http://localhost:3000`
 * **Backend API & Swagger Docs**: `http://localhost:8000/docs`
 
 #### Option 2: Local Developer Scripts (Instant Startup)
 ```bash
-# Terminal 1 — Start Backend:
-sudo ./scripts/run_backend.sh
+# Terminal 1 — Start Backend (defaults to CPU, pass 'gpu' for CUDA):
+./scripts/run_backend_local.sh
 
 # Terminal 2 — Start Frontend:
 ./scripts/run_frontend.sh

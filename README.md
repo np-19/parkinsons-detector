@@ -97,37 +97,84 @@ python3 src/deep_learning/meta_classifier.py --v2-predictions artifacts/models/d
 
 ## Full-Stack Clinical Web Application (NeuroVocal)
 
-This repository includes a production-ready, clinical-grade web application with a **FastAPI backend** and a **React 18 / TypeScript / Tailwind CSS frontend**.
+This repository includes a production-ready clinical web application with a **FastAPI backend** and a **React 18 / TypeScript / Tailwind CSS frontend**.
 
-### 1. Launch with Docker Compose (Recommended)
+The system defaults to **CPU mode** on any machine and supports optional **NVIDIA GPU acceleration** (with automatic fallback to CPU if GPU hardware is missing or inaccessible).
 
+---
+
+### Startup Option 1: Docker (Single Unified Runner)
+
+A single [`docker-compose.yml`](docker-compose.yml) powers the entire stack. You can run it using the unified helper script or directly with Docker Compose:
+
+#### Using the Helper Script:
 ```bash
-# Build and run backend (port 8000) and frontend (port 3000) in background
-sudo docker compose up -d --build backend frontend
+# Default (CPU mode - works on any machine, Mac, Linux, cloud VM):
+./scripts/run_docker.sh
 
-# Check status
-sudo docker compose ps
+# NVIDIA GPU mode (with automatic fallback to CPU if GPU is unavailable):
+./scripts/run_docker.sh gpu
 
-# Stop when finished
-sudo docker compose down
+# Explicit CPU mode:
+./scripts/run_docker.sh cpu
+
+# Stop all containers:
+./scripts/run_docker.sh down
 ```
 
-* **Frontend Clinical UI**: `http://localhost:3000`
-* **Interactive API Documentation**: `http://localhost:8000/docs`
-
-### 2. Launch with Local Development Scripts
-
+#### Using Docker Compose Directly:
 ```bash
-# Terminal 1 — Start FastAPI Backend:
-sudo ./scripts/run_backend.sh
+# Start default stack (CPU mode, defined via COMPOSE_PROFILES=cpu in .env):
+docker compose up -d --build
 
-# Terminal 2 — Start React Frontend:
-./scripts/run_frontend.sh
+# Start with NVIDIA GPU acceleration:
+docker compose --profile gpu up -d --build
+
+# View container logs:
+docker compose logs -f
+
+# Stop and clean up:
+docker compose down
 ```
 
-### 3. Core API Endpoints
+* **Frontend UI**: `http://localhost:3000`
+* **Backend API & Swagger Docs**: `http://localhost:8000/docs`
 
-* `GET /api/health`: Returns model warm status, active device (CUDA / CPU), and supported formats.
-* `GET /api/v1/meta-stats`: Exposes 10-moment reference statistics and the $0.29$ threshold.
-* `POST /api/v1/predict`: Accepts $1$ to $N$ audio files (`.wav`, `.ogg`, `.mpeg`, `.m4a`, `.webm`), runs sliding-window inference and the Meta-Classifier, and returns structured diagnosis JSON.
+---
+
+### Startup Option 2: Local Development (Instant Startup without Docker)
+
+For rapid development and hot-reloading:
+
+```bash
+# 1. In Terminal 1 — Start the FastAPI Backend:
+./scripts/run_backend_local.sh        # Runs in CPU mode by default
+./scripts/run_backend_local.sh gpu    # Runs on GPU (falls back to CPU if unavailable)
+
+# 2. In Terminal 2 — Start the React Frontend:
+./scripts/run_frontend.sh             # Starts Vite dev server at http://localhost:3000
+```
+
+---
+
+### Command-Line Voice Prediction (CLI)
+
+Test any audio file directly from the terminal without opening the web browser:
+
+```bash
+# Predict in CPU mode (default):
+./scripts/predict_voice.sh path/to/recording.wav
+
+# Predict using GPU acceleration:
+./scripts/predict_voice.sh --gpu path/to/recording.wav
+```
+
+---
+
+### Core API Endpoints
+
+* `GET /api/health`: Health status, active hardware device (`cuda` or `cpu`), and supported audio formats.
+* `GET /api/v1/meta-stats`: Exposes 10-moment reference statistics and the clinical decision boundary ($0.29$).
+* `POST /api/v1/predict`: Accepts $1$ to $N$ voice recordings (`.wav`, `.ogg`, `.m4a`, `.webm`), extracts Wav2Vec 2.0 embeddings, computes meta-features, and returns structured diagnosis JSON.
+
 
