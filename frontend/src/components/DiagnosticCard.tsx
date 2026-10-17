@@ -94,7 +94,7 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
             </div>
 
             <div className="text-right sm:border-l sm:border-slate-200/60 sm:pl-5 shrink-0">
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-medium">Meta-Classifier Score</div>
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-medium">Acoustic Biomarker Score</div>
               <div className="text-2xl font-bold font-mono text-slate-900">
                 {report.meta_classifier_score.toFixed(4)}
               </div>
@@ -104,55 +104,67 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
       })()}
 
       {/* Calibrated 3-Zone Clinical Probability Scale */}
-      <div className="my-5 p-4 sm:p-5 rounded-2xl bg-slate-50/90 border border-slate-200/80">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 mb-3 font-medium gap-1">
-          <span className="font-semibold text-slate-800">3-Tier Clinical Triage Scale</span>
-          <div className="flex items-center gap-3 text-[11px] text-slate-500">
-            <span>Screening Cutoff: <strong>0.20</strong> (Sens &gt;92%)</span>
-            <span>Balanced: <strong>0.29</strong></span>
-            <span>Diagnostic: <strong>0.35</strong> (Spec &gt;99%)</span>
-          </div>
-        </div>
+      {(() => {
+        const screeningCutoff = report.screening_cutoff ?? 0.25;
+        const balancedCutoff = report.threshold ?? 0.36;
+        const diagnosticCutoff = report.diagnostic_cutoff ?? 0.45;
 
-        {/* 3-Zone Segmented Track */}
-        <div className="relative w-full h-4 rounded-full overflow-hidden flex bg-slate-200 border border-slate-300/60 shadow-inner">
-          {/* Zone 1: Green [0.00 - 0.20] (20%) */}
-          <div className="w-[20%] h-full bg-emerald-300/80" title="Low Risk Zone (<0.20)" />
-          {/* Zone 2: Amber [0.20 - 0.35] (15%) */}
-          <div className="w-[15%] h-full bg-amber-300/90" title="Borderline Screening Alert Zone (0.20–0.35, Sensitivity >92%)" />
-          {/* Zone 3: Red [0.35 - 1.00] (65%) */}
-          <div className="w-[65%] h-full bg-rose-300/80" title="High Risk Zone (≥0.35)" />
-        </div>
+        const zone1Width = Math.round(screeningCutoff * 100);
+        const zone2Width = Math.round((diagnosticCutoff - screeningCutoff) * 100);
+        const zone3Width = Math.max(100 - zone1Width - zone2Width, 0);
 
-        {/* Needle Pin / Marker for Patient Score */}
-        <div className="relative w-full h-3">
-          <div
-            className="absolute top-[-16px] -translate-x-1/2 flex flex-col items-center transition-all duration-500 z-20 pointer-events-none"
-            style={{ left: `${scorePercent}%` }}
-          >
-            <div className="w-2.5 h-2.5 rounded-full bg-slate-900 ring-2 ring-white shadow-sm" />
-            <div className="text-[10px] font-bold font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded shadow-xs border border-slate-200 -mt-0.5 whitespace-nowrap">
-              {report.meta_classifier_score.toFixed(3)}
+        return (
+          <div className="my-5 p-4 sm:p-5 rounded-2xl bg-slate-50/90 border border-slate-200/80">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 mb-3 font-medium gap-1">
+              <span className="font-semibold text-slate-800">3-Tier Clinical Triage Scale</span>
+              <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                <span>Screening Cutoff: <strong>{screeningCutoff.toFixed(2)}</strong></span>
+                <span>Balanced: <strong>{balancedCutoff.toFixed(2)}</strong></span>
+                <span>Diagnostic: <strong>{diagnosticCutoff.toFixed(2)}</strong></span>
+              </div>
+            </div>
+
+            {/* 3-Zone Segmented Track */}
+            <div className="relative w-full h-4 rounded-full overflow-hidden flex bg-slate-200 border border-slate-300/60 shadow-inner">
+              {/* Zone 1: Green */}
+              <div style={{ width: `${zone1Width}%` }} className="h-full bg-emerald-300/80" title={`Low Risk Zone (<${screeningCutoff.toFixed(2)})`} />
+              {/* Zone 2: Amber */}
+              <div style={{ width: `${zone2Width}%` }} className="h-full bg-amber-300/90" title={`Borderline Screening Alert Zone (${screeningCutoff.toFixed(2)}–${diagnosticCutoff.toFixed(2)})`} />
+              {/* Zone 3: Red */}
+              <div style={{ width: `${zone3Width}%` }} className="h-full bg-rose-300/80" title={`High Risk Zone (≥${diagnosticCutoff.toFixed(2)})`} />
+            </div>
+
+            {/* Needle Pin / Marker for Patient Score */}
+            <div className="relative w-full h-3">
+              <div
+                className="absolute top-[-16px] -translate-x-1/2 flex flex-col items-center transition-all duration-500 z-20 pointer-events-none"
+                style={{ left: `${scorePercent}%` }}
+              >
+                <div className="w-2.5 h-2.5 rounded-full bg-slate-900 ring-2 ring-white shadow-sm" />
+                <div className="text-[10px] font-bold font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded shadow-xs border border-slate-200 -mt-0.5 whitespace-nowrap">
+                  {report.meta_classifier_score.toFixed(3)}
+                </div>
+              </div>
+            </div>
+
+            {/* Zone Labels Below Track */}
+            <div className="grid grid-cols-3 text-[10px] sm:text-[11px] font-medium pt-2 text-center text-slate-500">
+              <div className="text-left text-emerald-800">
+                <span className="font-semibold">0.00 – {screeningCutoff.toFixed(2)}</span>
+                <div className="text-[10px] text-slate-400">Low Risk (Healthy)</div>
+              </div>
+              <div className="text-center text-amber-800">
+                <span className="font-semibold">{screeningCutoff.toFixed(2)} – {diagnosticCutoff.toFixed(2)}</span>
+                <div className="text-[10px] text-slate-400">Borderline / ON-State Alert</div>
+              </div>
+              <div className="text-right text-rose-800">
+                <span className="font-semibold">{diagnosticCutoff.toFixed(2)} – 1.00</span>
+                <div className="text-[10px] text-slate-400">High Risk (Dysphonic)</div>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Zone Labels Below Track */}
-        <div className="grid grid-cols-3 text-[10px] sm:text-[11px] font-medium pt-2 text-center text-slate-500">
-          <div className="text-left text-emerald-800">
-            <span className="font-semibold">0.00 – 0.20</span>
-            <div className="text-[10px] text-slate-400">Low Risk (Healthy)</div>
-          </div>
-          <div className="text-center text-amber-800">
-            <span className="font-semibold">0.20 – 0.35</span>
-            <div className="text-[10px] text-slate-400">Borderline / ON-State (Sens &gt;92%)</div>
-          </div>
-          <div className="text-right text-rose-800">
-            <span className="font-semibold">0.35 – 1.00</span>
-            <div className="text-[10px] text-slate-400">High Risk (Dysphonic)</div>
-          </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* Actionable Clinical Recommendation & Next Steps */}
       {report.triage_recommendation && (

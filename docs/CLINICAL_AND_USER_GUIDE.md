@@ -10,14 +10,16 @@ Our Parkinson's Disease detection pipeline operates on raw voice waveforms (sust
 
 | Tier | Evaluation Level | Method / Strategy | Balanced Accuracy | Raw Accuracy | ROC-AUC | Clinical Role |
 | :---: | :--- | :--- | :---: | :---: | :---: | :--- |
-| **0** | **Recording-Level** | Single-crop Wav2Vec 2.0 Acoustic Model | **71.96%** | 71.96% | 0.7974 | Baseline perceptual acoustic feature extraction. |
-| **1** | **Participant Baseline** | Naive Arithmetic Mean across all recordings | **76.68%** | 75.30% | 0.8322 | Standard ML aggregation; vulnerable to pharmacological dilution. |
-| **2** | **Clinical Top-2** | Mean of the 2 most symptomatic recordings | **82.30%** | 81.35% | **0.8995** | Overcomes transient medication masking without complex models. |
-| **3** | **Meta-Classifier** | Multi-Moment Distribution Modeling (`[mean, max, min, top-2, p75, std, n]`) | **`91.20%`** | **`94.99%`** | **`0.9338`** | **Production Pipeline**: Captures medication variance. **98.85% specificity** (only 5 false alarms out of 433 controls). |
+| **0** | **Recording-Level (Test)** | Single-crop Wav2Vec 2.0 Acoustic Model | **71.22%** | 71.22% | 0.7853 | Baseline perceptual acoustic feature extraction. |
+| **1** | **Participant-Level (Test)** | Count-Invariant Mean ($\tau = 0.360$) | **74.72%** | 73.06% | **0.8245** | Production pipeline: unbiased probability averaging. |
+| **2** | **Participant-Level (Val)** | Validation-Calibrated Mean ($\tau = 0.360$) | **80.09%** | 79.79% | **0.8665** | Checkpoint selection benchmark (580 unseen participants). |
+| **Ext** | **Cross-Cohort (Zero-Shot)** | Raw sustained `/a/` phonation (`records`) | **75.00%** | 75.00% | — | Generalization across independent clinical institutions. |
+| *Clin* | *Clinical Top-2 (Test)* | *Medication-Aware Top-2 Takes* | *81.83%* | *79.27%* | *0.8985* | *Sensitivity-optimized clinical multi-take protocol.* |
+| *Abl* | *Exploratory Ablation* | *Multi-Moment Distribution Meta-Classifier* | *90.86%* | *95.16%* | *0.9346* | *Ablation documenting mPower adherence shortcut.* |
 
 ---
 
-## 2. Fine Clinical Details: Why Naive Mean Fails & Why Meta-Classifier Succeeds
+## 2. Fine Clinical Details: Why Standard Mean & Triage Scale Are Employed
 
 ### A. The Pharmacological Dilemma: Levodopa Masking (The "ON" / "OFF" State)
 Parkinson's Disease is characterized by basal ganglia dopamine depletion, causing laryngeal rigidity, hypophonia (reduced volume), and phonatory micro-tremor (4–7 Hz).
@@ -26,29 +28,16 @@ Patients manage symptoms using dopaminergic replacement therapy (principally **L
 - **"ON" State (Peak Medication, ~1–3 hours post-dose)**: Vocal tremor and rigidity temporarily diminish; phonation temporarily resembles healthy speech.
 - **"OFF" State (Pre-Dose / End-of-Dose Wearing Off)**: True motor dysarthria and vocal instabilities emerge prominently.
 
-### B. The Mathematical Dilution Problem
-When a patient submits multiple recordings over several days, some recordings inevitably occur during the "ON" state. 
+### B. The 3-Tier Clinical Triage Strategy
+Because a single recording might happen during an "ON" state, NeuroVocal employs a stratified 3-tier clinical decision support framework:
+1. **Low Risk ($P < 0.25$)**: Normal voice dynamics and vocal stability.
+2. **Borderline Screening Alert ($0.25 \le P < 0.36$)**: Sensitivity-optimized gate. Flags patients with subtle vocal tremor or potential medication "ON-state" masking for a morning pre-dose re-test or neurological consultation.
+3. **High Risk ($P \ge 0.36$)**: Manifest Parkinsonian dysphonia and phonatory tremor; specialist neurology referral advised.
 
-Consider a true Parkinson's patient who submits 4 recordings:
-- Recording 1 ("ON" state): $P(\text{PD}) = 0.15$
-- Recording 2 ("ON" state): $P(\text{PD}) = 0.18$
-- Recording 3 ("ON" state): $P(\text{PD}) = 0.22$
-- Recording 4 ("OFF" state, unmedicated tremor): $P(\text{PD}) = 0.85$
+### C. The Adherence Confounder & Count-Invariant Aggregation
+In exploratory analysis, multi-moment distribution features (`max, min, top-2, std dev, count`) achieved an apparent 91.20% balanced accuracy. However, our dataset audit revealed that in mPower, Parkinson's patients submitted significantly more recordings than controls (5.04 vs 1.72 takes on average; 100% of participants with $\ge 3$ takes are PD). Extreme-value statistics (`max` and `min`) naturally shift with sample size ($N$), inadvertently learning study adherence rather than pure vocal tremor. 
 
-Under standard arithmetic averaging (`mean()`):
-$$\text{Score}_{\text{patient}} = \frac{0.15 + 0.18 + 0.22 + 0.85}{4} = \frac{1.40}{4} = 0.35$$
-
-At the optimal validation decision threshold ($\tau = 0.360$), **this patient is classified as 0 (Healthy Control)** — a False Negative! The three medicated recordings diluted the true pathological signal.
-
-### C. The Solution: Statistical Distribution Modeling
-Healthy individuals **never** produce dysarthric vocal tremor or laryngeal rigidity. Their probability distribution across time is tightly bounded at the bottom ($\text{low mean}, \text{low max}, \text{near-zero std dev}$).
-
-Parkinson's patients, by contrast, exhibit **high temporal volatility ($\sigma$)** and **elevated peak scores ($\text{max}, \text{top-2}$)** due to the medication cycle.
-
-The **Participant Meta-Classifier** evaluates the complete feature vector:
-$$\mathbf{x} = [\mu, \max, \min, \text{top-2 mean}, Q_{75}, \sigma, \ln(N+1)]$$
-
-This statistical boundary achieves **91.20% Balanced Accuracy** and **98.85% Specificity** (only 5 false alarms out of 433 healthy controls).
+To eliminate this shortcut and ensure healthy individuals who take multiple samples are not falsely flagged, production inference standardizes to **Count-Invariant Probability Averaging** ($\bar{P} = \frac{1}{N}\sum P_i$) anchored at $\tau = 0.360$.
 
 ---
 
@@ -60,7 +49,7 @@ This statistical boundary achieves **91.20% Balanced Accuracy** and **98.85% Spe
 | **Frozen Layers** | 6 Transformer layers frozen | **4 layers frozen (8 layers unfrozen)** | Allows deep self-attention layers to specialize in dysphonia. |
 | **Pooling Method** | Temporal Attention Pooling | **Temporal Attention Pooling** | Dynamically focuses on acoustic tremor bursts. |
 | **Regularization** | Dropout 0.1 | **Mixup ($\alpha=0.2$), Dropout 0.3, Label Smoothing 0.1** | Prevents overfitting to acoustic background noise. |
-| **Test Balanced Acc** | 67.50% | **76.68% (Raw) / 91.20% (Meta-Classifier)** | 23.7% absolute accuracy gain. |
+| **Val / Test Performance** | 67.50% Val Balanced Acc | **80.09% Val Balanced Acc / 74.72% Test Acc (0.8245 ROC-AUC)** | Substantial gain in genuine acoustic representation learning. |
 | **Role in Project** | Baseline Ablation Reference | **Production Screening Engine** | Model 1 serves as the scientific comparison. |
 
 > [!NOTE]
@@ -502,18 +491,18 @@ To verify real-world deployment robustness, NeuroVocal was evaluated on an unsee
 ### A. Performance Across Audio Processing Modes
 | Condition | Phonation Protocol | Sensitivity (PD Recall) | Specificity (HC Clearance) | Balanced Accuracy |
 | :--- | :--- | :---: | :---: | :---: |
-| **Raw Waveforms** | **Sustained `/a/`** | **`81.82%` (18/22)** | **`63.64%` (14/22)** | **`72.73%`** |
+| **Raw Waveforms** | **Sustained `/a/`** | **`86.36%` (19/22)** | **`63.64%` (14/22)** | **`75.00%`** |
 | **Denoised Clean** | **Sustained `/a/`** | **`68.18%` (15/22)** | **`72.73%` (16/22)** | **`70.45%`** |
 | **Denoised Clean** | **All Vowels (`/a/` + `/i/`)** | **`63.64%` (14/22)** | **`59.09%` (13/22)** | **`61.36%`** |
 
 ### B. Core Clinical Findings
 1. **Raw vs. Denoised Audio**:
-   Raw audio achieved an **81.82% sensitivity** on Parkinson's disease. Standard noise reduction / spectral subtraction algorithms attenuate subtle breathiness, micro-shimmer, and turbulent aspiration noise caused by incomplete vocal fold closure. Preserving raw waveforms prevents artificial masking of early dysphonia.
+   Raw audio achieved an **86.36% sensitivity** (19/22 detected) on Parkinson's disease. Standard noise reduction / spectral subtraction algorithms attenuate subtle breathiness, micro-shimmer, and turbulent aspiration noise caused by incomplete vocal fold closure. Preserving raw waveforms prevents artificial masking of early dysphonia.
 2. **Phonetic Protocol Specificity**:
-   The open vowel `/a/` achieved superior control specificity (72.73%) compared to high-front constricted vowels like `/i/` (59.09%). Tongue and palatal constriction during `/i/` induces vocal tract formant shifts that mimic vocal strain.
+   The open vowel `/a/` achieved superior control specificity (72.73% clean, 63.64% raw) compared to high-front constricted vowels like `/i/` (59.09%). Tongue and palatal constriction during `/i/` induces vocal tract formant shifts that mimic vocal strain.
 3. **Selective Detection of Atypical Parkinsonism**:
-   - **Multiple System Atrophy (MSA)**: Flagged at **85.7% to 90.5%** for manifest dysphonia, accurately reflecting the severe laryngeal abductor paresis and stridor characteristic of MSA.
-   - **Progressive Supranuclear Palsy (PSP)**: Flagged at only **22.2% to 27.8%**, confirming that the model does not indiscriminately flag all movement disorders.
+   - **Multiple System Atrophy (MSA)**: Flagged at **95.2%** (20/21 subjects) for manifest dysphonia, accurately reflecting the severe laryngeal abductor paresis and stridor characteristic of MSA.
+   - **Progressive Supranuclear Palsy (PSP)**: Flagged at **55.6%** (10/18 subjects), reflecting predominantly supranuclear motor speech involvement rather than primary vocal fold abductor paresis.
 
 
 

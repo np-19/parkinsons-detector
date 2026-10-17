@@ -1,16 +1,16 @@
 {
-  "cross_validated_roc_auc": 0.9260653611313233,
-  "optimal_threshold": 0.26,
+  "cross_validated_roc_auc": 0.9346230503970389,
+  "optimal_threshold": 0.36,
   "metrics": {
-    "accuracy": 0.9499136442141624,
-    "balanced_accuracy": 0.912034547122655,
-    "sensitivity": 0.8356164383561644,
-    "specificity": 0.9884526558891455,
-    "f1": 0.8937728937728938,
-    "tn": 428,
-    "fp": 5,
-    "fn": 24,
-    "tp": 122
+    "accuracy": 0.9516407599309153,
+    "balanced_accuracy": 0.9086494352874182,
+    "sensitivity": 0.821917808219178,
+    "specificity": 0.9953810623556582,
+    "f1": 0.8955223880597015,
+    "tn": 431,
+    "fp": 2,
+    "fn": 26,
+    "tp": 120
   },
   "total_participants": 579
 }

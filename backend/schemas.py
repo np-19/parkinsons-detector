@@ -30,9 +30,9 @@ class PredictionResponse(BaseModel):
     triage_recommendation: str = Field(default="", description="Actionable clinical next steps and follow-up guidance")
     confidence_level: str = Field(..., description="Stratified clinical confidence tier")
     meta_classifier_score: float = Field(..., ge=0.0, le=1.0, description="Standardized multi-moment Meta-Classifier score")
-    threshold: float = Field(default=0.29, description="Balanced diagnostic cutoff threshold")
-    screening_cutoff: float = Field(default=0.20, description="Screening triage threshold (>92% Sensitivity)")
-    diagnostic_cutoff: float = Field(default=0.35, description="High-specificity diagnostic threshold (>99% Specificity)")
+    threshold: float = Field(default=0.36, description="Balanced diagnostic cutoff threshold")
+    screening_cutoff: float = Field(default=0.25, description="Screening triage threshold (>80% Sensitivity)")
+    diagnostic_cutoff: float = Field(default=0.45, description="High-specificity diagnostic threshold (>85% Specificity)")
     recordings_analyzed: int = Field(..., description="Count of recordings analyzed")
     distribution: StatisticalDistribution = Field(..., description="Statistical distribution metrics")
     recordings: List[RecordingResult] = Field(..., description="Breakdown of each recording evaluated")
@@ -41,8 +41,8 @@ class PredictionResponse(BaseModel):
 
 
 class MetaStatsResponse(BaseModel):
-    """Reference statistics used by the Meta-Classifier."""
-    threshold: float = 0.29
+    """Reference statistics used by the Clinical Aggregator."""
+    threshold: float = 0.36
     weights: List[float]
     reference_means: List[float]
     reference_stds: List[float]

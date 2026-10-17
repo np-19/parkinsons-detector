@@ -127,11 +127,14 @@
 
 ---
 
-### ADR-010: Participant-Distribution Meta-Classifier for Overcoming Levodopa Medication Masking
+### ADR-010: Count-Invariant Clinical Aggregation & Adherence Confounder Analysis
 
-- **Status**: Accepted
-- **Context**: In clinical evaluation, simple arithmetic mean aggregation across participant recordings produced a 76.68% balanced accuracy. Error analysis revealed that 62.5% of false negatives were caused by single-recording submissions or temporary symptom alleviation during the Levodopa dopaminergic "ON" medication state.
-- **Decision**: Implement a participant-level meta-classifier (`src/deep_learning/meta_classifier.py`) that operates on the multi-moment statistical distribution of each participant's recordings:
-  $$\mathbf{x}_{\text{participant}} = [\text{mean}, \text{max}, \text{min}, \text{top-2 mean}, \text{75th percentile}, \text{std dev}, \text{recording count}]$$
-- **Rationale**: When a Parkinson's patient is in an "ON" medication state, their voice is temporarily normal. Taking simple arithmetic means allows normal recordings to falsely suppress disease probability. Multi-moment distribution features explicitly detect the intermittent volatility ($\sigma$) and peak dysarthric events ($\text{top-2}$) without diluting the pathological signal.
-- **Consequences**: Out-of-Fold 5-Fold cross-validation across all 579 completely unseen test participants achieved **91.20% Balanced Accuracy**, **94.99% Raw Accuracy**, **98.85% Specificity** (only 5 false alarms out of 433 healthy controls), and **0.9338 ROC-AUC**, successfully exceeding the >85% target.
+- **Status**: Refactored (Supersedes Multi-Moment Meta-Classifier)
+- **Context**: In clinical evaluation, simple arithmetic mean aggregation across participant recordings produced a **74.72%** balanced accuracy (**0.8245 ROC-AUC**), while Top-2 medication-aware aggregation achieved **81.83%** (**0.8985 ROC-AUC**). Multi-moment distribution features (`mean`, `max`, `min`, `top-2`, `std dev`, `count`) were explored to mitigate diurnal Levodopa "ON" state symptom masking.
+- **Audit Findings**: Empirical verification revealed a major study-protocol confounder in the mPower dataset: Parkinson's participants submitted significantly more recordings than controls due to medication-tracking protocols (5.04 vs 1.72 mean takes; 100% of participants with $\ge 3$ takes in the dataset are PD). Consequently, order statistics (`max`, `min`, `std`) over variable takes inadvertently captured app usage adherence (AUC 0.897 on count alone). When evaluated on count-controlled cohorts (fixed $K=2$ takes), the meta-classifier provided zero gain over simple probability averaging.
+- **Decision**: Standardize production patient-level inference to **Count-Invariant Probability Averaging** ($\bar{P} = \frac{1}{N}\sum P_i$) anchored at the validation-calibrated decision threshold ($\tau = 0.360$) and stratified into a 3-tier clinical triage scale:
+  - **Low Risk ($\bar{P} < 0.25$)**: Normal voice dynamics.
+  - **Borderline Screening Alert ($0.25 \le \bar{P} < 0.36$)**: Sensitivity-optimized gate for mild dysphonia or suspected medication "ON-state" masking.
+  - **High Risk ($\bar{P} \ge 0.36$)**: High-confidence manifest vocal tremor; specialist neurological referral.
+  Statistical moments (diurnal variance $\sigma$, peak top-2) are retained in the UI as descriptive clinical session telemetry rather than automated decision weights.
+- **Consequences**: Guarantees zero data leakage and complete invariance to the number of recordings submitted. Anchors the system strictly to genuine acoustic dysphonic biomarkers (**80.09% Validation Balanced Accuracy, 0.8665 ROC-AUC; 74.72% Held-Out Test Balanced Accuracy, 0.8245 ROC-AUC; 81.83% Clinical Top-2 Balanced Accuracy, 0.8985 ROC-AUC; 75.00% External Multi-Cohort Generalization**).

@@ -4,14 +4,18 @@ All notable changes to the `parkinsons-detector` project are documented in this 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Phase 5] - 2026-10-17 - External Multi-Cohort Clinical Validation & Unified Run Scripts
+## [Phase 5] - 2026-10-17 - External Multi-Cohort Clinical Validation & Count-Invariant Pipeline
 
 ### Added
+- **Count-Invariant Inference & Held-Out Test Evaluation**:
+  - Achieved **74.72% Balanced Accuracy** (**0.8245 ROC-AUC**, 78.08% Sensitivity, 71.36% Specificity) on 579 held-out test participants under count-invariant aggregation.
+  - Achieved **81.83% Balanced Accuracy** (**0.8985 ROC-AUC**, 86.99% Sensitivity, 76.67% Specificity) under medication-aware Clinical Top-2 aggregation.
+  - Retained the 10-moment distribution meta-classifier (**90.86% Balanced Accuracy**, **0.9346 ROC-AUC**) as an exploratory ablation study documenting the mPower recording adherence confounder.
 - **External Multi-Cohort Clinical Validation**:
-  - `scripts/evaluate_records_dataset.py` & `scripts/evaluate_records.sh`: Local zero-Docker evaluation scripts supporting CPU and NVIDIA GPU modes with automatic fallback.
+  - `scripts/evaluate_records_dataset.py` & `scripts/evaluate_records.sh`: Local evaluation scripts supporting CPU and NVIDIA GPU modes with automatic fallback.
   - Validated zero-shot cross-dataset generalization across 83 participants (PD, Healthy Controls, MSA, PSP) and 337 recordings.
-  - Achieved **81.82% Sensitivity** (18/22 PD detected) and **72.73% Balanced Accuracy** on raw audio waveforms.
-  - Discovered strong clinical correlation with atypical parkinsonism: identified **85.7% - 90.5% of Multiple System Atrophy (MSA)** dysphonia cases.
+  - Achieved **86.36% Sensitivity** (19/22 PD detected) and **75.00% Balanced Accuracy** on raw audio waveforms.
+  - Discovered strong clinical correlation with atypical parkinsonism: identified **95.2% of Multiple System Atrophy (MSA)** dysphonia cases (20/21 subjects).
   - Saved detailed metrics report to `artifacts/records_dataset_evaluation_results.csv`.
 - **Documentation**:
   - Documented acoustic impact of spectral noise reduction vs. raw audio preservation on early dysphonia detection.

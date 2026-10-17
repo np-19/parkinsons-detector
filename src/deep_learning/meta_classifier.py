@@ -144,15 +144,17 @@ def run_meta_classifier(v2_preds_path, v1_preds_path=None, output_report=None):
         with open(out_p, "w") as f:
             json.dump(report, f, indent=2)
 
+    total_pd = best_stats["tp"] + best_stats["fn"]
+    total_ctrl = best_stats["tn"] + best_stats["fp"]
     print("\n" + "=" * 60)
-    print(" --- 4. Participant-Level Distribution Meta-Classifier ---")
+    print(" --- 4. Participant-Level Distribution Meta-Classifier (Ablation) ---")
     print("=" * 60)
     print(f"  Cross-Validated ROC-AUC:   {auc:.4f}")
     print(f"  Optimal Decision Threshold:{best_t:.2f}")
     print(f"  Balanced Accuracy:         {best_stats['balanced_accuracy'] * 100:.2f}%")
     print(f"  Raw Accuracy:              {best_stats['accuracy'] * 100:.2f}%")
-    print(f"  Sensitivity (PD Recall):   {best_stats['sensitivity'] * 100:.2f}% (Catches 122 / 146 PD patients)")
-    print(f"  Specificity (Healthy Ctrl):{best_stats['specificity'] * 100:.2f}% (428 / 433 controls correct - Only 5 false alarms!)")
+    print(f"  Sensitivity (PD Recall):   {best_stats['sensitivity'] * 100:.2f}% (Catches {best_stats['tp']} / {total_pd} PD patients)")
+    print(f"  Specificity (Healthy Ctrl):{best_stats['specificity'] * 100:.2f}% ({best_stats['tn']} / {total_ctrl} controls correct - {best_stats['fp']} false alarms)")
     print(f"  F1 Score:                  {best_stats['f1']:.4f}")
     print(f"  Confusion Matrix:          TN={best_stats['tn']}, FP={best_stats['fp']}, FN={best_stats['fn']}, TP={best_stats['tp']}")
     print("=" * 60)

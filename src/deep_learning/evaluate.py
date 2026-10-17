@@ -64,15 +64,17 @@ def compute_metrics(y_true: np.ndarray, y_prob: np.ndarray, threshold: float = 0
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate fine-tuned model on held-out test split")
-    parser.add_argument("--model-dir", type=str, default="artifacts/models/deep_learning/wav2vec2_finetuned", help="Directory containing best_model.pt")
+    parser.add_argument("--model-dir", type=str, default="artifacts/models/deep_learning/wav2vec2_v2", help="Directory containing best_model.pt")
     parser.add_argument("--test-metadata", type=str, default="data/metadata/test.csv", help="Path to test.csv")
     parser.add_argument("--audio-root", type=str, default="data/processed_audio", help="Audio root directory")
-    parser.add_argument("--batch-size", type=int, default=8, help="Batch size for inference")
-    parser.add_argument("--num-workers", type=int, default=2, help="Dataloader workers")
-    parser.add_argument("--duration", type=float, default=5.0, help="Audio segment duration in seconds")
+    parser.add_argument("--batch-size", type=int, default=4, help="Batch size for inference")
+    parser.add_argument("--num-workers", type=int, default=0, help="Dataloader workers (0=main thread, avoids IPC stalls)")
+    parser.add_argument("--duration", type=float, default=8.0, help="Audio segment duration in seconds")
     parser.add_argument("--num-crops", type=int, default=1, help="Number of overlapping crops per recording for TTA (1=center crop only)")
     parser.add_argument("--crop-stride", type=float, default=1.5, help="Stride in seconds between crops for multi-crop TTA")
     parser.add_argument("--max-test-samples", type=int, default=None, help="Cap test samples (optional for sanity check)")
+    parser.add_argument("--device", type=str, default=None, help="Device ('cuda', 'cpu')")
+    parser.add_argument("--fp16", action="store_true", default=True, help="Use FP16 mixed precision")
     return parser.parse_args()
 
 
@@ -85,9 +87,11 @@ def main() -> None:
         print(f"Error: Model checkpoint not found at {checkpoint_path}")
         sys.exit(1)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device_str = args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(device_str)
+    use_fp16 = args.fp16 and (device.type == "cuda")
     print(f"=== Held-Out Test Evaluation ===")
-    print(f"Device: {device}")
+    print(f"Device: {device} (FP16: {use_fp16})")
     print(f"Loading checkpoint from: {checkpoint_path}")
 
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
@@ -165,7 +169,8 @@ def main() -> None:
                     norm_crops.append(c.astype(np.float32))
 
                 crop_tensor = torch.from_numpy(np.stack(norm_crops)).to(device)
-                outputs = model(input_values=crop_tensor)
+                with torch.cuda.amp.autocast(enabled=use_fp16):
+                    outputs = model(input_values=crop_tensor)
                 # Average probability across all crops of this recording
                 rec_prob = outputs["probabilities"][:, 1].mean().item()
 
@@ -179,7 +184,8 @@ def main() -> None:
         else:
             for batch in tqdm(test_loader, desc="Testing"):
                 input_values = batch["input_values"].to(device)
-                outputs = model(input_values=input_values)
+                with torch.cuda.amp.autocast(enabled=use_fp16):
+                    outputs = model(input_values=input_values)
                 probs = outputs["probabilities"][:, 1]  # PD positive class probability
 
                 all_probs.append(probs.cpu().numpy())
@@ -250,13 +256,15 @@ def main() -> None:
 
     print("\n--- 2. Clinical Participant-Level (Top-2 Mean: Medication-Aware) ---")
     print(f"  Balanced Accuracy:        {part_metrics_top2['balanced_accuracy'] * 100:.2f}%")
-    print(f"  Accuracy:                 {part_metrics_top2['accuracy'] * 100:.2f}%")
-    print(f"  Sensitivity (PD Recall):  {part_metrics_top2['sensitivity'] * 100:.2f}% (Catches 126 / 146 true PD patients)")
-    print(f"  Specificity (Ctrl Rec):   {part_metrics_top2['specificity'] * 100:.2f}% (339 / 433 controls correct)")
+    tp_t2 = part_metrics_top2['confusion_matrix']['tp']
+    fn_t2 = part_metrics_top2['confusion_matrix']['fn']
+    tn_t2 = part_metrics_top2['confusion_matrix']['tn']
+    fp_t2 = part_metrics_top2['confusion_matrix']['fp']
+    print(f"  Sensitivity (PD Recall):  {part_metrics_top2['sensitivity'] * 100:.2f}% (Catches {tp_t2} / {tp_t2 + fn_t2} true PD patients)")
+    print(f"  Specificity (Ctrl Rec):   {part_metrics_top2['specificity'] * 100:.2f}% ({tn_t2} / {tn_t2 + fp_t2} controls correct)")
     print(f"  F1 Score:                 {part_metrics_top2['f1']:.4f}")
     print(f"  ROC-AUC:                  {part_metrics_top2['roc_auc']:.4f}")
-    print(f"  Confusion Matrix:         TN={part_metrics_top2['confusion_matrix']['tn']}, FP={part_metrics_top2['confusion_matrix']['fp']}, "
-          f"FN={part_metrics_top2['confusion_matrix']['fn']}, TP={part_metrics_top2['confusion_matrix']['tp']}")
+    print(f"  Confusion Matrix:         TN={tn_t2}, FP={fp_t2}, FN={fn_t2}, TP={tp_t2}")
 
     print("\n--- 3. Recording-Level Metrics ---")
     print(f"  Recordings Evaluated:     {len(y_true)}")

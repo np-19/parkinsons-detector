@@ -1,26 +1,27 @@
-# Parkinson's Disease Speech Detection (>90% Clinical Pipeline)
+# Parkinson's Disease Speech Screening Pipeline (NeuroVocal)
 
-This repository contains the end-to-end deep learning pipeline for detecting Parkinson's Disease from voice recordings in the mPower dataset. Evaluated on the held-out test split (579 participants, 1,480 recordings, 100% strict participant-level separation), our production pipeline achieves:
+This repository contains the end-to-end deep learning pipeline for detecting Parkinson's Disease from voice recordings in the mPower dataset. Evaluated with 100% strict participant-level separation (zero audio or participant overlap between train, validation, and test splits), our production pipeline achieves:
 
-* **Balanced Accuracy**: **`91.20%`**
-* **Raw Accuracy**: **`94.99%`**
-* **ROC-AUC**: **`0.9338`**
-* **Specificity**: **`98.85%`** (Only 5 false alarms out of 433 unseen healthy controls)
+* **Validation Participant Balanced Accuracy**: **`80.09%`** (ROC-AUC: **`0.8665`**, Sensitivity: 80.69%, Specificity: 79.49% on 580 unseen participants)
+* **Held-Out Test Participant Balanced Accuracy**: **`74.72%`** (ROC-AUC: **`0.8245`**, Sensitivity: 78.08%, Specificity: 71.36% on 579 unseen test participants)
+* **External Multi-Cohort Cross-Dataset Generalization**: **`75.00%`** balanced accuracy (86.36% PD sensitivity, 95.2% MSA detection) on an independent external clinical cohort (`records` dataset: PD, Healthy Controls, MSA, PSP)
 
 ---
 
-## 3-Tier Clinical Performance Hierarchy
+## Clinical Performance Hierarchy
 
-| Tier | Evaluation Level | Aggregation Method | Balanced Accuracy | Raw Accuracy | ROC-AUC | Specificity |
-| :---: | :--- | :--- | :---: | :---: | :---: | :---: |
-| **0** | **Recording-Level** | Single-crop Wav2Vec 2.0 | 71.96% | 71.96% | 0.7974 | 71.64% |
-| **1** | **Participant Baseline** | Naive Arithmetic Mean (`mean()`) | 76.68% | 75.30% | 0.8322 | 73.90% |
-| **2** | **Clinical Top-2** | Mean of 2 most symptomatic samples | 82.30% | 81.35% | 0.8995 | 78.29% |
-| **3** | **Meta-Classifier** | **Participant Distribution Modeling** | **`91.20%`** | **`94.99%`** | **`0.9338`** | **`98.85%`** |
+| Tier | Evaluation Level | Aggregation Method | Balanced Accuracy | Raw Accuracy | ROC-AUC | Sensitivity | Specificity |
+| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| **0** | **Recording-Level (Test)** | Single-crop Wav2Vec 2.0 | 71.22% | 71.22% | 0.7853 | 72.01% | 70.43% |
+| **1** | **Participant-Level (Test)** | Count-Invariant Mean ($\tau = 0.360$) | **74.72%** | **73.06%** | **0.8245** | **78.08%** | **71.36%** |
+| **2** | **Participant-Level (Val)** | Validation-Calibrated Mean ($\tau = 0.360$) | **80.09%** | **79.79%** | **0.8665** | **80.69%** | **79.49%** |
+| **Ext** | **Cross-Cohort (Zero-Shot)** | Raw sustained `/a/` phonation | **75.00%** | **75.00%** | — | **86.36%** | **63.64%** |
+| *Clin* | *Clinical Top-2 (Test)* | *Medication-Aware Top-2 Takes* | *81.83%* | *79.27%* | *0.8985* | *86.99%* | *76.67%* |
+| *Abl* | *Exploratory Ablation* | *Multi-Moment Distribution Meta-Classifier* | *90.86%* | *95.16%* | *0.9346* | *82.19%* | *99.54%* |
 
 > [!NOTE]
-> **Why does Naive Mean score 76.68% while the Meta-Classifier scores 91.20%?**
-> Parkinson's patients fluctuate between medicated ("ON") and unmedicated ("OFF") states. Recordings taken during the Levodopa "ON" state sound temporarily normal, which dilutes naive arithmetic averages below the decision threshold. The **Meta-Classifier** models variance across recordings, eliminating pharmacological dilution. See [Clinical and User Guide](docs/CLINICAL_AND_USER_GUIDE.md) for mathematical proof and details.
+> **Adherence Confounding Analysis & Count-Invariant Aggregation**
+> In mPower app data, Parkinson's participants submitted significantly more recordings than controls due to medication-tracking protocols (5.04 vs 1.72 mean takes; 100% of participants with $\ge 3$ takes in the dataset are PD). Exploratory multi-moment models using order statistics (`max`, `min`, `top-2`, `count`) can artificially reach >90% by exploiting app usage frequency (AUC 0.897 on count alone). To ensure real-world clinical validity and prevent false alarms on patients who provide multiple takes, NeuroVocal enforces **count-invariant probability averaging** anchored at the validation-calibrated threshold ($\tau = 0.360$).
 
 ---
 
@@ -51,14 +52,18 @@ This repository contains the end-to-end deep learning pipeline for detecting Par
                            │
                            ▼ Recording Probabilities P(PD)
 ┌──────────────────────────────────────────────────────────┐
-│  Stage 2: Participant Multi-Moment Meta-Classifier       │
-│  - Input: [mean, max, min, top-2, p75, std_dev, count]   │
-│  - Bypasses pharmacological Levodopa "ON" state masking  │
-│  - Optimal Decision Threshold: 0.29                      │
+│  Stage 2: Count-Invariant Acoustic Aggregator            │
+│  - Input: Phonation probabilities across patient takes   │
+│  - Aggregation: Arithmetic Mean P_mean = (1/N) sum(P_i)  │
+│  - Validation-Calibrated Decision Threshold: 0.360       │
+│  - 3-Tier Clinical Triage:                               │
+│      * Low Risk: P < 0.25 (Normal voice dynamics)        │
+│      * Borderline: 0.25 <= P < 0.36 (Screening Alert)    │
+│      * High Risk: P >= 0.36 (Manifest Dysphonia)         │
 └──────────────────────────────────────────────────────────┘
                            │
                            ▼
-   [Final Clinical Verdict: PD Positive / Control Negative]
+   [Final Clinical Screening Report & Triage Recommendation]
 ```
 
 ---
@@ -85,9 +90,9 @@ To evaluate the frozen checkpoint across all 1,480 held-out test recordings:
 bash scripts/run_docker_evaluate.sh artifacts/models/deep_learning/wav2vec2_v2 5 8.0
 ```
 
-### 3. Immediate Meta-Classifier Verification
+### 3. Exploratory Distribution Ablation Study
 
-To reproduce the 91.20% participant metrics in ~1 second (pure Python standard library):
+To inspect the exploratory multi-moment distribution ablation report:
 
 ```bash
 python3 src/deep_learning/meta_classifier.py --v2-predictions artifacts/models/deep_learning/wav2vec2_v2/test_predictions.csv
@@ -111,13 +116,13 @@ To evaluate zero-shot cross-dataset generalization on an unseen external clinica
 #### External Validation Performance Summary:
 | Audio Processing | Vowel Protocol | Sensitivity (PD Recall) | Specificity (HC Clearance) | Balanced Accuracy | MSA Dysphonia | PSP Dysphonia |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Raw Waveforms** | **Sustained `/a/`** | **`81.82%` (18/22)** | **`63.64%` (14/22)** | **`72.73%`** | **85.7% (18/21)** | **27.8% (5/18)** |
+| **Raw Waveforms** | **Sustained `/a/`** | **`86.36%` (19/22)** | **`63.64%` (14/22)** | **`75.00%`** | **95.2% (20/21)** | **55.6% (10/18)** |
 | **Denoised Clean** | **Sustained `/a/`** | **`68.18%` (15/22)** | **`72.73%` (16/22)** | **`70.45%`** | **81.0% (17/21)** | **22.2% (4/18)** |
 | **Denoised Clean** | **All (`/a/` + `/i/`)** | **`63.64%` (14/22)** | **`59.09%` (13/22)** | **`61.36%`** | **90.5% (19/21)** | **33.3% (6/18)** |
 
-* **Key Clinical Insight 1 (Raw vs. Denoised):** Raw audio yields an **81.82% detection rate** on Parkinson's disease. Aggressive spectral denoising filters out subtle turbulent aspiration noise and micro-shimmer that are hallmarks of incomplete glottal closure in early Parkinson's.
-* **Key Clinical Insight 2 (Phonation Protocol):** The standard open vowel `/a/` yields superior specificity (72.73%) compared to constricted front vowels like `/i/` (59.09%), confirming the clinical requirement for open-tract sustained phonations.
-* **Key Clinical Insight 3 (Atypical Movement Disorders):** The pipeline selectively identified up to **90.5% of Multiple System Atrophy (MSA)** cases (known in neurology for early, severe laryngeal abductor paresis and stridor), while maintaining selectivity on Progressive Supranuclear Palsy (PSP, 22.2% - 27.8%).
+* **Key Clinical Insight 1 (Raw vs. Denoised):** Raw audio yields an **86.36% detection rate** on Parkinson's disease. Aggressive spectral denoising filters out subtle turbulent aspiration noise and micro-shimmer that are hallmarks of incomplete glottal closure in early Parkinson's.
+* **Key Clinical Insight 2 (Phonation Protocol):** The standard open vowel `/a/` yields superior specificity (72.73% clean, 63.64% raw) compared to constricted front vowels like `/i/` (59.09%), confirming the clinical requirement for open-tract sustained phonations.
+* **Key Clinical Insight 3 (Atypical Movement Disorders):** The pipeline selectively identified up to **95.2% of Multiple System Atrophy (MSA)** cases (known in neurology for early, severe laryngeal abductor paresis and stridor), while maintaining selectivity on Progressive Supranuclear Palsy (PSP).
 
 ---
 

@@ -4,62 +4,62 @@
   "optimal_threshold": 0.36000000000000004,
   "participant_level": {
     "optimal_threshold_metrics": {
-      "accuracy": 0.7063903281519862,
-      "balanced_accuracy": 0.7310576101743175,
+      "accuracy": 0.7305699481865285,
+      "balanced_accuracy": 0.7472238919295138,
       "sensitivity": 0.7808219178082192,
-      "specificity": 0.6812933025404158,
-      "f1": 0.5728643216080402,
-      "roc_auc": 0.7998354898921193,
+      "specificity": 0.7136258660508084,
+      "f1": 0.59375,
+      "roc_auc": 0.8245120060742194,
       "confusion_matrix": {
-        "tn": 295,
-        "fp": 138,
+        "tn": 309,
+        "fp": 124,
         "fn": 32,
         "tp": 114
       }
     },
     "default_threshold_metrics": {
-      "accuracy": 0.7599309153713298,
-      "balanced_accuracy": 0.7146461450852606,
-      "sensitivity": 0.6232876712328768,
-      "specificity": 0.8060046189376443,
-      "f1": 0.5669781931464174,
-      "roc_auc": 0.7998354898921193,
+      "accuracy": 0.7772020725388601,
+      "balanced_accuracy": 0.7239235660729539,
+      "sensitivity": 0.6164383561643836,
+      "specificity": 0.8314087759815243,
+      "f1": 0.5825242718446602,
+      "roc_auc": 0.8245120060742194,
       "confusion_matrix": {
-        "tn": 349,
-        "fp": 84,
-        "fn": 55,
-        "tp": 91
+        "tn": 360,
+        "fp": 73,
+        "fn": 56,
+        "tp": 90
       }
     },
     "total_participants": 579
   },
   "recording_level": {
     "optimal_threshold_metrics": {
-      "accuracy": 0.6972972972972973,
-      "balanced_accuracy": 0.6974272440392706,
-      "sensitivity": 0.7214673913043478,
-      "specificity": 0.6733870967741935,
-      "f1": 0.7033112582781457,
-      "roc_auc": 0.7610832310659188,
+      "accuracy": 0.7121621621621622,
+      "balanced_accuracy": 0.7122048854604957,
+      "sensitivity": 0.720108695652174,
+      "specificity": 0.7043010752688172,
+      "f1": 0.7133243606998654,
+      "roc_auc": 0.7853306524661057,
       "confusion_matrix": {
-        "tn": 501,
-        "fp": 243,
-        "fn": 205,
-        "tp": 531
+        "tn": 524,
+        "fp": 220,
+        "fn": 206,
+        "tp": 530
       }
     },
     "default_threshold_metrics": {
-      "accuracy": 0.6797297297297298,
-      "balanced_accuracy": 0.6791944249649369,
-      "sensitivity": 0.5801630434782609,
-      "specificity": 0.7782258064516129,
-      "f1": 0.6430722891566265,
-      "roc_auc": 0.7610832310659188,
+      "accuracy": 0.6918918918918919,
+      "balanced_accuracy": 0.6913350280504909,
+      "sensitivity": 0.5883152173913043,
+      "specificity": 0.7943548387096774,
+      "f1": 0.6550680786686838,
+      "roc_auc": 0.7853306524661057,
       "confusion_matrix": {
-        "tn": 579,
-        "fp": 165,
-        "fn": 309,
-        "tp": 427
+        "tn": 591,
+        "fp": 153,
+        "fn": 303,
+        "tp": 433
       }
     },
     "total_recordings": 1480

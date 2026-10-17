@@ -189,7 +189,7 @@ export function App() {
       {/* Footer */}
       <footer className="border-t border-slate-200/70 bg-white py-3.5 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-[11px] text-slate-400">
-          NeuroVocal Clinical Decision Support • Model: Wav2Vec2 + Temporal Attention Meta-Classifier (mPower Cohort)
+          NeuroVocal Clinical Decision Support • Model: Fine-Tuned Wav2Vec 2.0 (mPower Cohort)
         </div>
       </footer>
     </div>

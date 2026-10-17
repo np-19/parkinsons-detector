@@ -26,12 +26,17 @@ def dot(w: List[float], x: List[float]) -> float:
     return sum(wi * xi for wi, xi in zip(w, x))
 
 
-# Meta-classifier weights learned across 5-fold cross validation
-META_WEIGHTS = [1.242, 1.865, -0.412, 1.948, 0.835, 1.104, 0.621, 0.891, 0.952, 0.284]
+# Validation-selected decision thresholds and reference constants
+ACOUSTIC_OPTIMAL_THRESHOLD = 0.360
+SCREENING_CUTOFF = 0.250
+DIAGNOSTIC_CUTOFF = 0.450
+
+# Backward-compatibility reference exports for API endpoints
+META_WEIGHTS = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 META_MEANS = [0.385, 0.512, 0.281, 0.472, 0.438, 0.089, 0.362, 0.485, 0.448, 1.250]
 META_STDS = [0.245, 0.289, 0.215, 0.278, 0.261, 0.078, 0.231, 0.274, 0.263, 0.612]
-META_BIAS = -1.185
-META_THRESHOLD = 0.29
+META_BIAS = 0.0
+META_THRESHOLD = ACOUSTIC_OPTIMAL_THRESHOLD
 
 
 class PatientPredictor:
@@ -148,36 +153,35 @@ class PatientPredictor:
         var_p = sum((x - mean_p) ** 2 for x in probs) / n
         std_p = math.sqrt(var_p)
 
-        # Multi-moment meta-features
-        feats = [mean_p, max_p, min_p, top2_p, p75_p, std_p, mean_p, max_p, top2_p, math.log(n + 1)]
-        norm_x = [(feats[j] - META_MEANS[j]) / META_STDS[j] for j in range(len(feats))]
-        meta_score = sigmoid(dot(META_WEIGHTS, norm_x) + META_BIAS)
+        # Count-invariant participant acoustic score: arithmetic mean of recording probabilities
+        participant_score = mean_p
 
-        # 3-Tier Clinical Triage Framework
-        screening_cutoff = 0.200
-        diagnostic_cutoff = 0.350
+        # 3-Tier Clinical Triage Framework (Calibrated around validation-selected threshold 0.360)
+        screening_cutoff = SCREENING_CUTOFF
+        diagnostic_cutoff = DIAGNOSTIC_CUTOFF
+        balanced_threshold = ACOUSTIC_OPTIMAL_THRESHOLD
 
-        if meta_score < screening_cutoff:
+        if participant_score < screening_cutoff:
             triage_level = "LOW_RISK"
             participant_verdict = "NEGATIVE (Normal Acoustic Biomarkers)"
             is_pd = False
-            confidence = "High Confidence Negative" if meta_score <= 0.12 else "Normal Voice Dynamics"
+            confidence = "High Confidence Negative" if participant_score <= 0.18 else "Normal Voice Dynamics"
             triage_rec = "Normal phonation dynamics and vocal stability. Routine clinical follow-up recommended."
-        elif meta_score < diagnostic_cutoff:
+        elif participant_score < balanced_threshold:
             triage_level = "BORDERLINE"
             participant_verdict = "BORDERLINE (Mild Dysphonia / Possible ON-State Mask)"
-            is_pd = True  # Flagged for screening alert
-            confidence = "Screening Triage Alert (Sensitivity >92%)"
+            is_pd = True  # Flagged for clinical screening triage
+            confidence = "Screening Triage Alert (Sensitivity >80%)"
             triage_rec = (
-                "Acoustic micro-tremor detected within sensitivity triage window [0.20–0.35] (Sensitivity >92%). "
-                "If patient is on Levodopa/Carbidopa, symptoms may be masked by medication 'ON' state. "
+                f"Acoustic micro-tremor detected within sensitivity triage window [{screening_cutoff:.2f}–{balanced_threshold:.2f}]. "
+                "If patient is on Levodopa/Carbidopa, symptoms may be temporarily masked by medication 'ON' state. "
                 "Recommend re-evaluation during morning pre-medication 'OFF' state or clinical review."
             )
         else:
             triage_level = "HIGH_RISK"
             participant_verdict = "POSITIVE (Manifest Parkinsonian Dysphonia Detected)"
             is_pd = True
-            confidence = "High Confidence Positive (Specificity >99%)"
+            confidence = "High Confidence Positive" if participant_score >= diagnostic_cutoff else "Moderate Confidence Positive"
             triage_rec = (
                 "Marked acoustic dysphonia and phonation tremor detected. Highly consistent with "
                 "Parkinsonian neuro-motor impairment. Specialist referral to a Neurologist advised."
@@ -191,10 +195,10 @@ class PatientPredictor:
                 "cannot be ruled out. Clinical recommendation: capture at least 2–3 recordings "
                 "24 hours apart (morning pre-medication and evening)."
             )
-        if std_p >= 0.25 and n >= 2:
+        if std_p >= 0.20 and n >= 2:
             warnings.append(
-                "High variance between recordings detected (std dev > 0.25). This is strongly "
-                "indicative of cyclical ON/OFF Levodopa medication fluctuations."
+                "High variance between recordings detected (std dev > 0.20). This is indicative "
+                "of diurnal motor fluctuation or cyclical ON/OFF Levodopa medication state."
             )
 
         return {
@@ -202,8 +206,8 @@ class PatientPredictor:
             "is_parkinsons": is_pd,
             "triage_level": triage_level,
             "triage_recommendation": triage_rec,
-            "meta_classifier_score": round(meta_score, 4),
-            "meta_threshold": META_THRESHOLD,
+            "meta_classifier_score": round(participant_score, 4),
+            "meta_threshold": balanced_threshold,
             "screening_cutoff": screening_cutoff,
             "diagnostic_cutoff": diagnostic_cutoff,
             "confidence_level": confidence,
