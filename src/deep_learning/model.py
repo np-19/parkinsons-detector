@@ -17,9 +17,9 @@ import torch.nn.functional as F
 from transformers import AutoConfig, AutoModel, Wav2Vec2Config, Wav2Vec2Model
 
 try:
-    from transformers import WaveLMConfig, WaveLMModel
+    from transformers import WavLMConfig, WavLMModel
 except ImportError:
-    WaveLMConfig, WaveLMModel = AutoConfig, AutoModel
+    WavLMConfig, WavLMModel = AutoConfig, AutoModel
 
 
 class TemporalAttentionPooling(nn.Module):
@@ -224,7 +224,7 @@ class WaveLMForParkinsons(nn.Module):
 
     def __init__(
         self,
-        model_name: str = "microsoft/wavelm-base-plus",
+        model_name: str = "microsoft/wavlm-base-plus",
         num_classes: int = 2,
         num_frozen_layers: int = 4,
         freeze_feature_extractor: bool = True,
@@ -236,14 +236,16 @@ class WaveLMForParkinsons(nn.Module):
         mask_feature_prob: float = 0.05,
     ):
         super().__init__()
+        # Standardize HuggingFace repo identifier if passed as wavelm
+        model_name = model_name.replace("wavelm", "wavlm").replace("WaveLM", "WavLM")
         self.model_name = model_name
         self.num_classes = num_classes
         self.num_frozen_layers = num_frozen_layers
         self.freeze_feature_extractor = freeze_feature_extractor
 
-        # Load WaveLM backbone configuration
-        if WaveLMConfig is not None and WaveLMConfig is not AutoConfig:
-            self.config = WaveLMConfig.from_pretrained(model_name)
+        # Load WavLM backbone configuration
+        if WavLMConfig is not None and WavLMConfig is not AutoConfig:
+            self.config = WavLMConfig.from_pretrained(model_name)
         else:
             self.config = AutoConfig.from_pretrained(model_name)
 
@@ -254,8 +256,8 @@ class WaveLMForParkinsons(nn.Module):
         self.config.mask_feature_length = 10
 
         # Load backbone
-        if WaveLMModel is not None and WaveLMModel is not AutoModel:
-            self.wavelm = WaveLMModel.from_pretrained(model_name, config=self.config)
+        if WavLMModel is not None and WavLMModel is not AutoModel:
+            self.wavelm = WavLMModel.from_pretrained(model_name, config=self.config)
         else:
             self.wavelm = AutoModel.from_pretrained(model_name, config=self.config)
 
@@ -358,10 +360,11 @@ def build_speech_model(
     model_name: str = "facebook/wav2vec2-base",
     **kwargs,
 ) -> nn.Module:
-    """Factory function to build Wav2Vec2 or WaveLM model based on model_name."""
+    """Factory function to build Wav2Vec2 or WavLM model based on model_name."""
     name_lower = model_name.lower()
-    if "wavelm" in name_lower:
-        return WaveLMForParkinsons(model_name=model_name, **kwargs)
+    if "wavlm" in name_lower or "wavelm" in name_lower:
+        clean_model_name = model_name.replace("wavelm", "wavlm").replace("WaveLM", "WavLM")
+        return WaveLMForParkinsons(model_name=clean_model_name, **kwargs)
     return Wav2Vec2ForParkinsons(model_name=model_name, **kwargs)
 
 

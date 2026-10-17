@@ -88,7 +88,7 @@ python3 -m src.deep_learning.train \
   --data-root data/processed_audio \
   --metadata-root data/metadata \
   --output-root "$OUTPUT_DIR" \
-  --model-name microsoft/wavelm-base-plus \
+  --model-name microsoft/wavlm-base-plus \
   --batch-size 16 \
   --gradient-accumulation-steps 2 \
   --epochs 20 \
@@ -155,3 +155,4 @@ echo " [SUCCESS] WAVELM CLOUD TRAINING PIPELINE COMPLETE!"
 echo " Checkpoint saved to: $OUTPUT_DIR/best_model.pt"
 echo " Test Report saved to: $OUTPUT_DIR/test_evaluation_report.json"
 echo "======================================================================"
+
