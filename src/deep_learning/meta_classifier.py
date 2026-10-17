@@ -1,8 +1,8 @@
 """Participant-Level Meta-Classifier for Parkinson's Detection.
 
 Learns the optimal decision boundary over each participant's recording distribution
-(mean, max, min, top-2, std dev, and model ensemble features), bypassing
-the Levodopa 'ON' medication dilution effect.
+(mean, max, min, top-2, std dev, and model ensemble features), accounting for
+diurnal acoustic fluctuations.
 """
 
 import argparse

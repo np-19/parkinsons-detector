@@ -11,7 +11,7 @@
 - [ADR-007: Docker-First Containerization for Local GTX 1650 and GridShare Cloud GPU Portability](#adr-007-docker-first-containerization-for-local-gtx-1650-and-gridshare-cloud-gpu-portability)
 - [ADR-008: Pre-Implementation Verification and Documentation Protocol](#adr-008-pre-implementation-verification-and-documentation-protocol)
 - [ADR-009: 8.0-Second Audio Window & 8-Layer Transformer Unfreezing](#adr-009-80-second-audio-window--8-layer-transformer-unfreezing)
-- [ADR-010: Participant-Distribution Meta-Classifier for Overcoming Levodopa Medication Masking](#adr-010-participant-distribution-meta-classifier-for-overcoming-levodopa-medication-masking)
+- [ADR-010: Participant-Distribution Meta-Classifier for Overcoming medication Medication Masking](#adr-010-participant-distribution-meta-classifier-for-overcoming-medication-medication-masking)
 
 ---
 
@@ -130,7 +130,7 @@
 ### ADR-010: Count-Invariant Clinical Aggregation & Adherence Confounder Analysis
 
 - **Status**: Refactored (Supersedes Multi-Moment Meta-Classifier)
-- **Context**: In clinical evaluation, simple arithmetic mean aggregation across participant recordings produced a **74.72%** balanced accuracy (**0.8245 ROC-AUC**), while Top-2 medication-aware aggregation achieved **81.83%** (**0.8985 ROC-AUC**). Multi-moment distribution features (`mean`, `max`, `min`, `top-2`, `std dev`, `count`) were explored to mitigate diurnal Levodopa "ON" state symptom masking.
+- **Context**: In clinical evaluation, simple arithmetic mean aggregation across participant recordings produced a **74.72%** balanced accuracy (**0.8245 ROC-AUC**), while Top-2 medication-aware aggregation achieved **81.83%** (**0.8985 ROC-AUC**). Multi-moment distribution features (`mean`, `max`, `min`, `top-2`, `std dev`, `count`) were explored to mitigate diurnal medication "ON" state symptom masking.
 - **Audit Findings**: Empirical verification revealed a major study-protocol confounder in the mPower dataset: Parkinson's participants submitted significantly more recordings than controls due to medication-tracking protocols (5.04 vs 1.72 mean takes; 100% of participants with $\ge 3$ takes in the dataset are PD). Consequently, order statistics (`max`, `min`, `std`) over variable takes inadvertently captured app usage adherence (AUC 0.897 on count alone). When evaluated on count-controlled cohorts (fixed $K=2$ takes), the meta-classifier provided zero gain over simple probability averaging.
 - **Decision**: Standardize production patient-level inference to **Count-Invariant Probability Averaging** ($\bar{P} = \frac{1}{N}\sum P_i$) anchored at the validation-calibrated decision threshold ($\tau = 0.360$) and stratified into a 3-tier clinical triage scale:
   - **Low Risk ($\bar{P} < 0.25$)**: Normal voice dynamics.

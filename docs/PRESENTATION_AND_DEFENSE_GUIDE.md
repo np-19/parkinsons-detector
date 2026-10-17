@@ -164,7 +164,7 @@
 ### Q13: "Why was Logistic Regression used in the exploratory ablation study?"
 > **Answer**: As an exploratory meta-learner to analyze multi-moment distribution features:
 > * **Stage 1 (Wav2Vec 2.0 Base + Attention Head)**: Performs acoustic feature extraction directly on raw waveform samples to catch non-linear phonatory micro-tremors and glottal dysarthria ($71.22\%$ recording-level balanced accuracy).
-> * **Stage 2 Ablation (Logistic Regression)**: Tested whether modeling distribution moments ($\mu, \max, \min, \text{top}_2, p_{75}, \sigma, \ln(N+1)$) could overcome Levodopa "ON"-state masking. While it scored 90.86% balanced accuracy and 0.9346 ROC-AUC, our ablation proved this was largely driven by mPower's recording-count adherence confounder. Consequently, production inference was transitioned to count-invariant averaging.
+> * **Stage 2 Ablation (Logistic Regression)**: Tested whether modeling distribution moments ($\mu, \max, \min, \text{top}_2, p_{75}, \sigma, \ln(N+1)$) could overcome medication "ON"-state masking. While it scored 90.86% balanced accuracy and 0.9346 ROC-AUC, our ablation proved this was largely driven by mPower's recording-count adherence confounder. Consequently, production inference was transitioned to count-invariant averaging.
 
 > **Historical-ablation note:** The following questions describe the exploratory
 > meta-classifier analysis only. They do not describe the production API,
@@ -173,7 +173,7 @@
 ### Q14: "How did the exploratory Meta-Classifier operate on a single recording versus multiple recordings?"
 > **Answer**:
 > * **Multiple Recordings ($N \ge 2$)**: Evaluates full longitudinal variance ($\sigma$) and peak severity ($\text{top}_2$), accurately separating steady controls from fluctuating Parkinson's patients.
-> * **Single Recording ($N = 1$)**: Order statistics mathematically collapse to the single probability value, and variance collapses to zero ($\sigma = 0.0$). The engine automatically flags a mandatory medical advisory warning that Levodopa masking cannot be ruled out and recommends capturing 2–3 takes over 24 hours.
+> * **Single Recording ($N = 1$)**: Order statistics mathematically collapse to the single probability value, and variance collapses to zero ($\sigma = 0.0$). The engine automatically flags a mandatory medical advisory warning that medication masking cannot be ruled out and recommends capturing 2–3 takes over 24 hours.
 
 ### Q15: "Where does the -1.14 penalty come from on a single recording? Was it arbitrarily chosen?"
 > **Answer**: No, it is the exact mathematical result of **Z-score normalization** on real clinical population data:
@@ -205,7 +205,7 @@
 >   2. Together, these structural penalties ($-2.70$) outweigh the borderline acoustic evidence ($+1.37$), pulling the logit to $-1.86$ ($\text{Score} = 0.1342$).
 >   3. **Clinical Guardrail Triggered**: The system deliberately withholds a permanent diagnosis on a single borderline take and displays an automated amber advisory: *"Single recording analyzed. Pharmacological masking cannot be ruled out... capture 2–3 recordings."*
 > * **The Longitudinal Resolution**:
->   In reality, this exact patient submitted 7 recordings over several days across their Levodopa medication cycle:
+>   In reality, this exact patient submitted 7 recordings over several days across their medication medication cycle:
 >   * `72813.wav` (0.11) & `90241.wav` (0.24): Taken during peak medication ("ON" state, normal phonation).
 >   * `76646.wav` (0.49): Medication wearing off (borderline tremor).
 >   * `78296.wav` (0.56), `87545.wav` (0.57), `81284.wav` (0.66): Unmedicated "OFF" states (severe tremor).
@@ -223,7 +223,7 @@
 >    * Sample Size $\ln(N+1)$: $\mu = 1.250, \sigma = 0.612$
 > 2. **Trained Model Weights ($w$)**: Learned via Stochastic Gradient Descent (SGD) with L2 weight regularization ($\lambda = 0.01$) across 5-fold cross-validation.
 >    * Top-2 received the highest weight ($+1.948$) because two shaky recordings are the single strongest indicator of neurological tremor.
->    * Fluctuation received a positive weight ($+1.104$) because real Parkinson's patients exhibit diurnal motor variance due to Levodopa wearing-off cycles.
+>    * Fluctuation received a positive weight ($+1.104$) because real Parkinson's patients exhibit diurnal motor variance due to medication wearing-off cycles.
 > 3. **The Relationship**:
 >    $$\text{Impact} = \text{Weight } (w) \times \left( \frac{\text{Patient Value } (x) - \mu}{\sigma} \right)$$
 

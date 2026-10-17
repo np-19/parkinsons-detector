@@ -47,7 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Added
 - **Participant-Level Meta-Classifier** (`src/deep_learning/meta_classifier.py`):
   - Statistical aggregation engine over recording distributions (mean, max, min, top-2, std dev, count).
-  - Effectively resolves the clinical "ON-medication" dilution phenomenon where Levodopa-alleviated recordings falsely suppress disease probability.
+  - Effectively resolves the clinical "ON-medication" dilution phenomenon where medication-alleviated recordings falsely suppress disease probability.
 - **Official Test Benchmark Results**:
   - **Cross-Validated ROC-AUC**: **0.9338** (surpasses all published mPower benchmarks).
   - **Participant Balanced Accuracy**: **91.20%** (exceeds the >85% target).

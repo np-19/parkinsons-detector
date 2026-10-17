@@ -21,10 +21,10 @@ Our Parkinson's Disease detection pipeline operates on raw voice waveforms (sust
 
 ## 2. Fine Clinical Details: Why Standard Mean & Triage Scale Are Employed
 
-### A. The Pharmacological Dilemma: Levodopa Masking (The "ON" / "OFF" State)
+### A. The Pharmacological Dilemma: medication Masking (The "ON" / "OFF" State)
 Parkinson's Disease is characterized by basal ganglia dopamine depletion, causing laryngeal rigidity, hypophonia (reduced volume), and phonatory micro-tremor (4–7 Hz).
 
-Patients manage symptoms using dopaminergic replacement therapy (principally **Levodopa / Carbidopa**):
+Patients manage symptoms using dopaminergic replacement therapy (principally **medical therapy**):
 - **"ON" State (Peak Medication, ~1–3 hours post-dose)**: Vocal tremor and rigidity temporarily diminish; phonation temporarily resembles healthy speech.
 - **"OFF" State (Pre-Dose / End-of-Dose Wearing Off)**: True motor dysarthria and vocal instabilities emerge prominently.
 
@@ -80,7 +80,7 @@ steps below are collection guidance, not a claim of diagnostic accuracy:
 ### Step 3: The Multi-Session Sampling Protocol (The Golden Rule)
 - **Do not rely on a single recording.** A single recording may not represent a person's full acoustic variation. Medication effects are a plausible hypothesis, not a demonstrated cause of individual errors in this evaluation.
 - **Protocol**: Capture **2 to 3 recordings across 24–48 hours**:
-  - **Sample 1 (Morning "OFF" state)**: First thing in the morning, **before** taking the morning dose of Levodopa.
+  - **Sample 1 (Morning "OFF" state)**: First thing in the morning, **before** taking the morning dose of medication.
   - **Sample 2 (Peak "ON" state)**: 1.5 to 2 hours after medication.
   - **Sample 3 (Evening Wearing-Off)**: Before the evening dose.
 - Multiple recordings may reduce sensitivity to medication-state variation, but the
@@ -126,7 +126,7 @@ python3 src/deep_learning/predict_patient.py \
 -----------------------------------------------------------------
   Clinical Observations / Warnings:
     * High variance between recordings detected (std dev > 0.25). 
-      This is strongly indicative of cyclical ON/OFF Levodopa medication fluctuations.
+      This is strongly indicative of cyclical ON/OFF medication medication fluctuations.
 =================================================================
 ```
 
@@ -330,8 +330,8 @@ In the clinical study, this patient submitted 7 recordings across diurnal medica
 
 | Take ID | Timing / Clinical State | Raw $P(\text{PD})$ | Local Status |
 | :---: | :--- | :---: | :--- |
-| `72813.wav` | Peak Levodopa "ON" state | `0.1124` | Normal Phonation |
-| `90241.wav` | Peak Levodopa "ON" state | `0.2438` | Normal Phonation |
+| `72813.wav` | Peak medication "ON" state | `0.1124` | Normal Phonation |
+| `90241.wav` | Peak medication "ON" state | `0.2438` | Normal Phonation |
 | **`76646.wav`** | **Medication wearing off (transitional)** | **`0.4915`** | **Dysarthric / Tremor** |
 | `72423.wav` | Medication wearing off | `0.4811` | Dysarthric / Tremor |
 | `78296.wav` | Pre-dose "OFF" state (tremor) | `0.5576` | Dysarthric / Tremor |
@@ -419,7 +419,7 @@ The user interface (`frontend/src/`) is designed around clinical authority, calm
 * **Microphone Ingestion (`AudioRecorder.tsx`)**: Directly accesses microphone via `navigator.mediaDevices.getUserMedia` with raw audio settings (`autoGainControl: false`, `noiseSuppression: false`), rendering a live real-time `<canvas>` waveform and an 8-second progress countdown ring.
 * **File Upload Dropzone (`Dropzone.tsx`)**: Drag-and-drop zone supporting `.wav`, `.mp3`, `.mpeg`, `.ogg`, `.m4a`, and `.webm` up to 25 MB per file.
 * **Continuous Calibrated Scale (`DiagnosticCard.tsx`)**: Displays the participant mean along a 0.00 to 1.00 linear scale using thresholds returned by the API.
-* **Automated Pharmacological Guardrails**: Displays conditional alerts explaining Levodopa masking when only one take is analyzed, or verifies multi-session protocol satisfaction when $N \ge 2$.
+* **Automated Pharmacological Guardrails**: Displays conditional alerts explaining medication masking when only one take is analyzed, or verifies multi-session protocol satisfaction when $N \ge 2$.
 * **Print / PDF Summary**: One-click export button formatting the report for patient records or clinical referral.
 
 ### D. How to Launch the Application

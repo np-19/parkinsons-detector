@@ -224,9 +224,9 @@ class PatientPredictor:
         warnings = []
         if n == 1:
             warnings.append(
-                "Single recording analyzed. Pharmacological masking (Levodopa 'ON' state) "
+                "Single recording analyzed. Diurnal acoustic fluctuations "
                 "cannot be ruled out. Clinical recommendation: capture at least 2–3 recordings "
-                "24 hours apart (morning pre-medication and evening)."
+                "across different times of day."
             )
         if std_p >= 0.20 and n >= 2:
             warnings.append(
