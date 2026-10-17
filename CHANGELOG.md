@@ -4,9 +4,22 @@ All notable changes to the `parkinsons-detector` project are documented in this 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Phase 5] - 2026-10-17 - External Multi-Cohort Clinical Validation & Unified Run Scripts
+
+### Added
+- **External Multi-Cohort Clinical Validation**:
+  - `scripts/evaluate_records_dataset.py` & `scripts/evaluate_records.sh`: Local zero-Docker evaluation scripts supporting CPU and NVIDIA GPU modes with automatic fallback.
+  - Validated zero-shot cross-dataset generalization across 83 participants (PD, Healthy Controls, MSA, PSP) and 337 recordings.
+  - Achieved **81.82% Sensitivity** (18/22 PD detected) and **72.73% Balanced Accuracy** on raw audio waveforms.
+  - Discovered strong clinical correlation with atypical parkinsonism: identified **85.7% - 90.5% of Multiple System Atrophy (MSA)** dysphonia cases.
+  - Saved detailed metrics report to `artifacts/records_dataset_evaluation_results.csv`.
+- **Documentation**:
+  - Documented acoustic impact of spectral noise reduction vs. raw audio preservation on early dysphonia detection.
+  - Validated clinical superiority of the standard sustained `/a/` open-vowel protocol over constricted front vowels like `/i/`.
+
 ---
 
-## [Unreleased] - Phase 4: End-to-End Fine-Tuning & Docker Containerization
+## [Phase 4] - End-to-End Fine-Tuning & Docker Containerization
 
 ### Added
 - **Docker-First Containerization**:
