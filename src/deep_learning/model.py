@@ -14,7 +14,12 @@ from typing import Dict, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import Wav2Vec2Config, Wav2Vec2Model
+from transformers import AutoConfig, AutoModel, Wav2Vec2Config, Wav2Vec2Model
+
+try:
+    from transformers import WaveLMConfig, WaveLMModel
+except ImportError:
+    WaveLMConfig, WaveLMModel = AutoConfig, AutoModel
 
 
 class TemporalAttentionPooling(nn.Module):
@@ -206,4 +211,157 @@ class Wav2Vec2ForParkinsons(nn.Module):
             {"params": backbone_params, "lr": backbone_lr, "weight_decay": weight_decay},
             {"params": head_params, "lr": head_lr, "weight_decay": weight_decay},
         ]
+
+
+class WaveLMForParkinsons(nn.Module):
+    """Fine-tuned WaveLM model for Parkinson's disease classification.
+
+    WaveLM (e.g. microsoft/wavelm-base-plus) was pretrained on 60,000 hours of
+    speech with masked speech denoising and restoration, capturing fine-grained
+    acoustic pathology (micro-tremor, breathiness, phonatory instabilities)
+    superior to phoneme-focused speech recognition backbones.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "microsoft/wavelm-base-plus",
+        num_classes: int = 2,
+        num_frozen_layers: int = 4,
+        freeze_feature_extractor: bool = True,
+        gradient_checkpointing: bool = True,
+        dropout: float = 0.3,
+        class_weights: Optional[torch.Tensor] = None,
+        label_smoothing: float = 0.1,
+        mask_time_prob: float = 0.05,
+        mask_feature_prob: float = 0.05,
+    ):
+        super().__init__()
+        self.model_name = model_name
+        self.num_classes = num_classes
+        self.num_frozen_layers = num_frozen_layers
+        self.freeze_feature_extractor = freeze_feature_extractor
+
+        # Load WaveLM backbone configuration
+        if WaveLMConfig is not None and WaveLMConfig is not AutoConfig:
+            self.config = WaveLMConfig.from_pretrained(model_name)
+        else:
+            self.config = AutoConfig.from_pretrained(model_name)
+
+        self.config.apply_spec_augment = True
+        self.config.mask_time_prob = mask_time_prob
+        self.config.mask_time_length = 10
+        self.config.mask_feature_prob = mask_feature_prob
+        self.config.mask_feature_length = 10
+
+        # Load backbone
+        if WaveLMModel is not None and WaveLMModel is not AutoModel:
+            self.wavelm = WaveLMModel.from_pretrained(model_name, config=self.config)
+        else:
+            self.wavelm = AutoModel.from_pretrained(model_name, config=self.config)
+
+        if gradient_checkpointing and hasattr(self.wavelm, "gradient_checkpointing_enable"):
+            self.wavelm.gradient_checkpointing_enable()
+
+        if freeze_feature_extractor and hasattr(self.wavelm, "feature_extractor"):
+            self.wavelm.feature_extractor.requires_grad_(False)
+
+        # Freeze first N Transformer encoder layers
+        if hasattr(self.wavelm, "encoder") and hasattr(self.wavelm.encoder, "layers"):
+            for idx, layer in enumerate(self.wavelm.encoder.layers):
+                if idx < num_frozen_layers:
+                    for param in layer.parameters():
+                        param.requires_grad = False
+                else:
+                    for param in layer.parameters():
+                        param.requires_grad = True
+
+        hidden_dim = self.config.hidden_size  # 768 for wavelm-base / wavelm-base-plus
+
+        # Temporal attention pooling
+        self.pool = TemporalAttentionPooling(hidden_dim=hidden_dim, attention_dim=128)
+
+        # Classification Head
+        self.classifier = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, 256),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, num_classes),
+        )
+
+        # Loss function with optional class weighting and label smoothing
+        self.loss_fn = nn.CrossEntropyLoss(
+            weight=class_weights,
+            label_smoothing=label_smoothing,
+        )
+
+    def forward(
+        self,
+        input_values: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Forward pass for WaveLM."""
+        outputs = self.wavelm(
+            input_values=input_values,
+            attention_mask=attention_mask,
+            return_dict=True,
+        )
+        hidden_states = outputs.last_hidden_state  # (batch_size, time_frames, hidden_dim)
+
+        # Temporal attention pooling
+        pooled, attn_weights = self.pool(hidden_states)
+
+        # Classification logits
+        logits = self.classifier(pooled)
+        probabilities = F.softmax(logits, dim=-1)
+
+        result = {
+            "logits": logits,
+            "probabilities": probabilities,
+            "attention_weights": attn_weights,
+            "embeddings": pooled,
+        }
+
+        if labels is not None:
+            loss = self.loss_fn(logits, labels)
+            result["loss"] = loss
+
+        return result
+
+    def get_parameter_groups(
+        self,
+        backbone_lr: float = 2.5e-5,
+        head_lr: float = 1.5e-4,
+        weight_decay: float = 0.01,
+    ) -> list:
+        """Return parameter groups with differential learning rates."""
+        backbone_params = []
+        head_params = []
+
+        for name, param in self.named_parameters():
+            if not param.requires_grad:
+                continue
+            if "classifier" in name or "pool" in name:
+                head_params.append(param)
+            else:
+                backbone_params.append(param)
+
+        return [
+            {"params": backbone_params, "lr": backbone_lr, "weight_decay": weight_decay},
+            {"params": head_params, "lr": head_lr, "weight_decay": weight_decay},
+        ]
+
+
+def build_speech_model(
+    model_name: str = "facebook/wav2vec2-base",
+    **kwargs,
+) -> nn.Module:
+    """Factory function to build Wav2Vec2 or WaveLM model based on model_name."""
+    name_lower = model_name.lower()
+    if "wavelm" in name_lower:
+        return WaveLMForParkinsons(model_name=model_name, **kwargs)
+    return Wav2Vec2ForParkinsons(model_name=model_name, **kwargs)
+
 

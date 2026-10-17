@@ -56,14 +56,16 @@ class PatientPredictor:
         self.target_length = int(duration * sample_rate)
         self.num_crops = num_crops
 
-        print(f"Loading Wav2Vec2 Parkinson's model from: {model_path} (on {self.device})...")
-        from src.deep_learning.model import Wav2Vec2ForParkinsons
-
         checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
         config = checkpoint.get("config", {})
+        model_name = config.get("model_name", "facebook/wav2vec2-base")
+        print(f"Loading speech model '{model_name}' from: {model_path} (on {self.device})...")
+        from src.deep_learning.model import build_speech_model
+
         num_frozen = config.get("num_frozen_layers", checkpoint.get("num_frozen_layers", 4))
         dropout = config.get("dropout", checkpoint.get("dropout", 0.3))
-        self.model = Wav2Vec2ForParkinsons(
+        self.model = build_speech_model(
+            model_name=model_name,
             num_frozen_layers=num_frozen,
             dropout=dropout,
             gradient_checkpointing=False,

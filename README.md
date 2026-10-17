@@ -27,6 +27,7 @@ This repository contains the end-to-end deep learning pipeline for detecting Par
 
 ## Documentation Navigation
 
+- **[Cloud RTX 4090 WaveLM Training Guide](docs/TRAIN_WAVELM_4090_GUIDE.md)**: Step-by-step instructions for fine-tuning `microsoft/wavelm-base-plus` and running evaluation on cloud GPUs.
 - **[Clinical Rationale & Operating User Guide](docs/CLINICAL_AND_USER_GUIDE.md)**: Detailed clinical rationale, Levodopa dilution breakdown, Standard Operating Procedure (SOP), patient phonation guidelines, and Python API.
 - **[Presentation & Viva Defense Guide](docs/PRESENTATION_AND_DEFENSE_GUIDE.md)**: Comprehensive Q&A preparation for engineering defense/viva examinations, ablation comparisons, and clinical insights.
 - **[Architecture Decisions Record (ADR)](docs/DECISIONS.md)** (also at root: [`DECISIONS.md`](DECISIONS.md)): ADR-001 through ADR-010 tracking key design choices.

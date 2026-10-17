@@ -25,7 +25,7 @@ from sklearn.metrics import (
 from tqdm import tqdm
 
 from .dataset import MPowerAudioDataset, create_dataloader
-from .model import Wav2Vec2ForParkinsons
+from .model import Wav2Vec2ForParkinsons, WaveLMForParkinsons, build_speech_model
 
 
 def compute_metrics(y_true: np.ndarray, y_prob: np.ndarray, threshold: float = 0.5) -> Dict[str, float]:
@@ -103,10 +103,12 @@ def main() -> None:
     print(f"Loaded validation-selected optimal threshold: {optimal_threshold:.3f}")
 
     # Initialize model
-    model = Wav2Vec2ForParkinsons(
-        model_name=config.get("model_name", "facebook/wav2vec2-base"),
+    model_name = config.get("model_name", "facebook/wav2vec2-base")
+    print(f"Instantiating architecture for backbone: '{model_name}'...")
+    model = build_speech_model(
+        model_name=model_name,
         num_classes=2,
-        num_frozen_layers=config.get("num_frozen_layers", 6),
+        num_frozen_layers=config.get("num_frozen_layers", 4),
         freeze_feature_extractor=True,
         gradient_checkpointing=False,  # No checkpointing needed for eval
     )

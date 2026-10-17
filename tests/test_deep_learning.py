@@ -108,3 +108,16 @@ def test_threshold_search():
     assert best_bal_acc == 1.0
     assert 0.60 < best_thresh <= 0.65
 
+
+def test_build_speech_model_factory_exports():
+    """Verify speech model factory and architectures are cleanly exported."""
+    from src.deep_learning.model import (
+        Wav2Vec2ForParkinsons,
+        WaveLMForParkinsons,
+        build_speech_model,
+    )
+    assert Wav2Vec2ForParkinsons is not None
+    assert WaveLMForParkinsons is not None
+    assert callable(build_speech_model)
+
+

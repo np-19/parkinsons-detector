@@ -31,7 +31,7 @@ from tqdm import tqdm
 from transformers import get_cosine_schedule_with_warmup
 
 from .dataset import MPowerAudioDataset, create_dataloader
-from .model import Wav2Vec2ForParkinsons
+from .model import Wav2Vec2ForParkinsons, WaveLMForParkinsons, build_speech_model
 
 
 def set_seed(seed: int = 42) -> None:
@@ -203,6 +203,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume-from", type=str, default=None, help="Path to checkpoint .pt to resume training from")
     parser.add_argument("--max-train-samples", type=int, default=None, help="Cap train samples (e.g. 100 for benchmark)")
     parser.add_argument("--max-val-samples", type=int, default=None, help="Cap val samples (e.g. 30 for benchmark)")
+    parser.add_argument("--pos-weight", type=float, default=None, help="Loss weight for positive class (PD), e.g. 2.5 to counter class imbalance")
     return parser.parse_args()
 
 
@@ -268,15 +269,22 @@ def main() -> None:
         num_workers=args.num_workers,
     )
 
+    # Class weighting for loss function
+    class_weights = None
+    if args.pos_weight is not None:
+        class_weights = torch.tensor([1.0, float(args.pos_weight)], device=device)
+        print(f"Applying class weights: [1.0, {args.pos_weight}] to counter class imbalance.")
+
     # Model
     print(f"\nInitializing model '{args.model_name}'...")
-    model = Wav2Vec2ForParkinsons(
+    model = build_speech_model(
         model_name=args.model_name,
         num_classes=2,
         num_frozen_layers=args.num_frozen_layers,
         freeze_feature_extractor=True,
         gradient_checkpointing=args.gradient_checkpointing,
         dropout=args.dropout,
+        class_weights=class_weights,
         label_smoothing=args.label_smoothing,
         mask_time_prob=args.mask_time_prob,
         mask_feature_prob=args.mask_feature_prob,
