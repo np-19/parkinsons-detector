@@ -58,14 +58,24 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+# Determine python executable
+if [ -x "${REPO_ROOT}/data/.venv/bin/python3" ]; then
+    PYTHON_EXEC="${REPO_ROOT}/data/.venv/bin/python3"
+else
+    PYTHON_EXEC="python3"
+fi
+
 VENV_PACKAGES="${REPO_ROOT}/data/.venv/lib/python3.14/site-packages"
 export PYTHONPATH="${REPO_ROOT}:${VENV_PACKAGES}${PYTHONPATH:+:${PYTHONPATH}}"
 export PYTHONDONTWRITEBYTECODE=1
 
-exec python3 "${SCRIPT_DIR}/evaluate_records_dataset.py" \
+echo ">>> Starting NeuroVocal records clinical evaluation [WaveLM v4 Best Model] on ${DEVICE}..."
+
+exec "${PYTHON_EXEC}" "${SCRIPT_DIR}/evaluate_records_dataset.py" \
   --device "${DEVICE}" \
   --vowels "${VOWELS}" \
   --audio-type "${AUDIO_TYPE}" \
+  --model-path "artifacts/models/deep_learning/wavelm_v4/best_model.pt" \
   --csv "test_samples/records/dataset.csv" \
   --audio-dir "test_samples/records" \
   --output-csv "artifacts/records_dataset_evaluation_results.csv" \

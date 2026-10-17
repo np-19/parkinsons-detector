@@ -6,9 +6,14 @@ from typing import List
 # Base workspace directory (points to root of repository)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Model weights path
-DEFAULT_MODEL_PATH = str(BASE_DIR / "artifacts/models/deep_learning/wav2vec2_v2/best_model.pt")
-MODEL_PATH = os.getenv("MODEL_PATH", DEFAULT_MODEL_PATH)
+# Model weights path (WaveLM v4 best model)
+DEFAULT_WAVELM_PATH = str(BASE_DIR / "artifacts/models/deep_learning/wavelm_v4/best_model.pt")
+DEFAULT_WAV2VEC2_PATH = str(BASE_DIR / "artifacts/models/deep_learning/wav2vec2_v2/best_model.pt")
+
+MODEL_PATH = os.getenv("MODEL_PATH", DEFAULT_WAVELM_PATH)
+SECONDARY_MODEL_PATH = os.getenv("SECONDARY_MODEL_PATH", None)
+USE_ENSEMBLE = os.getenv("USE_ENSEMBLE", "false").lower() in ("true", "1", "yes")
+ENSEMBLE_THRESHOLD = float(os.getenv("ENSEMBLE_THRESHOLD", "0.310"))
 
 # Inference hardware configuration
 DEVICE = os.getenv("DEVICE", None)  # None = auto-detect CUDA if available, else CPU

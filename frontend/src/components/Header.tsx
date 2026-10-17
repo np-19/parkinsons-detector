@@ -21,9 +21,6 @@ export const Header: React.FC<HeaderProps> = ({ health, loading }) => {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <h1 className="font-semibold text-slate-900 tracking-tight text-base sm:text-lg truncate">NeuroVocal</h1>
-              <span className="text-[10px] sm:text-[11px] font-medium bg-blue-50 text-blue-700 px-1.5 sm:px-2 py-0.5 rounded-full border border-blue-200/60 shrink-0">
-                v2.0
-              </span>
             </div>
             <p className="text-[11px] sm:text-xs text-slate-500 truncate hidden xs:block">Acoustic Parkinson's Screening Engine</p>
           </div>
@@ -44,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({ health, loading }) => {
               </div>
               <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <span className="font-medium hidden sm:inline">Model Ready (91.2%)</span>
+                <span className="font-medium hidden sm:inline">Model Ready</span>
                 <span className="font-medium sm:hidden">Ready</span>
               </div>
             </div>

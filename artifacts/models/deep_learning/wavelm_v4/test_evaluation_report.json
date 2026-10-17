@@ -9,7 +9,7 @@
       "sensitivity": 0.773972602739726,
       "specificity": 0.7944572748267898,
       "f1": 0.6494252873563219,
-      "roc_auc": 0.8560536556044165,
+      "roc_auc": 0.8559508367869911,
       "confusion_matrix": {
         "tn": 344,
         "fp": 89,
@@ -23,7 +23,7 @@
       "sensitivity": 0.5684931506849316,
       "specificity": 0.9030023094688222,
       "f1": 0.6125461254612546,
-      "roc_auc": 0.8560536556044165,
+      "roc_auc": 0.8559508367869911,
       "confusion_matrix": {
         "tn": 391,
         "fp": 42,
@@ -35,17 +35,17 @@
   },
   "recording_level": {
     "optimal_threshold_metrics": {
-      "accuracy": 0.7452702702702703,
-      "balanced_accuracy": 0.7449815918653576,
-      "sensitivity": 0.6915760869565217,
+      "accuracy": 0.745945945945946,
+      "balanced_accuracy": 0.7456609396914446,
+      "sensitivity": 0.6929347826086957,
       "specificity": 0.7983870967741935,
-      "f1": 0.7297491039426524,
-      "roc_auc": 0.8183055019869098,
+      "f1": 0.7306590257879656,
+      "roc_auc": 0.8182826744389902,
       "confusion_matrix": {
         "tn": 594,
         "fp": 150,
-        "fn": 227,
-        "tp": 509
+        "fn": 226,
+        "tp": 510
       }
     },
     "default_threshold_metrics": {
@@ -54,7 +54,7 @@
       "sensitivity": 0.5692934782608695,
       "specificity": 0.8790322580645161,
       "f1": 0.6730923694779116,
-      "roc_auc": 0.8183055019869098,
+      "roc_auc": 0.8182826744389902,
       "confusion_matrix": {
         "tn": 654,
         "fp": 90,

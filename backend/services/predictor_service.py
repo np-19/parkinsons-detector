@@ -8,7 +8,13 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 
-from backend.config import DEVICE, MODEL_PATH
+from backend.config import (
+    DEVICE,
+    ENSEMBLE_THRESHOLD,
+    MODEL_PATH,
+    SECONDARY_MODEL_PATH,
+    USE_ENSEMBLE,
+)
 from backend.schemas import (
     MetaStatsResponse,
     FailedRecording,
@@ -36,6 +42,9 @@ class PredictorService:
     def __init__(self):
         self.predictor: Optional[PatientPredictor] = None
         self.model_path = MODEL_PATH
+        self.secondary_model_path = SECONDARY_MODEL_PATH
+        self.use_ensemble = USE_ENSEMBLE
+        self.threshold = ENSEMBLE_THRESHOLD
         self.device = DEVICE
 
     @classmethod
@@ -50,9 +59,16 @@ class PredictorService:
             logger.info("Predictor is already initialized.")
             return
 
-        logger.info("Initializing PatientPredictor from %s (device: %s)...", self.model_path, self.device)
+        logger.info(
+            "Initializing PatientPredictor (WaveLM best model, ensemble=%s, device=%s)...",
+            self.use_ensemble,
+            self.device,
+        )
         self.predictor = PatientPredictor(
             model_path=self.model_path,
+            secondary_model_path=self.secondary_model_path if self.use_ensemble else None,
+            use_ensemble=self.use_ensemble,
+            threshold=self.threshold,
             device=self.device,
             duration=8.0,
             sample_rate=16000,
@@ -168,13 +184,18 @@ class PredictorService:
         )
         screening_cutoff = max(0.15, threshold - 0.10)
         diagnostic_cutoff = min(0.85, threshold + 0.10)
+        model_ver = (
+            "Option B Ensemble (WaveLM v4 [75%] + Wav2Vec2 v2 [25%])"
+            if (predictor and getattr(predictor, "is_ensemble", False))
+            else "WaveLM v4 (mPower)"
+        )
         return MetaStatsResponse(
             threshold=round(threshold, 3),
             screening_cutoff=round(screening_cutoff, 3),
             diagnostic_cutoff=round(diagnostic_cutoff, 3),
             aggregation="arithmetic_mean",
             score_field="participant_mean_score",
-            model_version="Wav2Vec2_v2 (mPower)",
+            model_version=model_ver,
             weights=META_WEIGHTS,
             reference_means=META_MEANS,
             reference_stds=META_STDS,

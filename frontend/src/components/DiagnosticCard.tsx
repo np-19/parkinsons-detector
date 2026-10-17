@@ -163,7 +163,7 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
               </div>
               <div className="text-center text-amber-800">
                 <span className="font-semibold">{screeningCutoff.toFixed(2)} – {balancedCutoff.toFixed(2)}</span>
-                <div className="text-[10px] text-slate-400">Borderline / ON-State Alert</div>
+                <div className="text-[10px] text-slate-400">Borderline / Phonation Alert</div>
               </div>
               <div className="text-right text-rose-800">
                 <span className="font-semibold">{balancedCutoff.toFixed(2)} – 1.00</span>
@@ -225,7 +225,7 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
           <div className="text-xl font-bold font-mono text-slate-900 mt-1">
             {report.distribution.std_deviation.toFixed(4)}
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Motor variance / ON-OFF cycle</div>
+          <div className="text-[11px] text-slate-400 mt-0.5">Within-patient motor variance</div>
         </div>
       </div>
 

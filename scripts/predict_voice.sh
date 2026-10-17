@@ -22,10 +22,17 @@ fi
 DEVICE="cpu"
 AUDIO_FILES=()
 
+# Determine python executable
+if [ -x "${REPO_ROOT}/data/.venv/bin/python3" ]; then
+    PYTHON_EXEC="${REPO_ROOT}/data/.venv/bin/python3"
+else
+    PYTHON_EXEC="python3"
+fi
+
 for arg in "$@"; do
     case "${arg}" in
         --gpu|gpu)
-            if python3 -c "import torch; exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
+            if "${PYTHON_EXEC}" -c "import torch; exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
                 DEVICE="cuda"
             else
                 echo "[WARNING] GPU requested, but CUDA is not available. Falling back to CPU."
@@ -51,4 +58,4 @@ VENV_PACKAGES="${REPO_ROOT}/data/.venv/lib/python3.14/site-packages"
 export PYTHONPATH="${REPO_ROOT}:${VENV_PACKAGES}${PYTHONPATH:+:${PYTHONPATH}}"
 export PYTHONDONTWRITEBYTECODE=1
 
-exec python3 src/deep_learning/predict_patient.py "${AUDIO_FILES[@]}" --device "${DEVICE}"
+exec "${PYTHON_EXEC}" src/deep_learning/predict_patient.py "${AUDIO_FILES[@]}" --device "${DEVICE}"

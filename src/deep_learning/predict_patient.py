@@ -12,6 +12,11 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
+# Ensure repository root is in sys.path
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import numpy as np
 import torch
 import torchaudio
@@ -25,10 +30,14 @@ def dot(w: List[float], x: List[float]) -> float:
     return sum(wi * xi for wi, xi in zip(w, x))
 
 
-# Validation-selected decision thresholds and reference constants
-ACOUSTIC_OPTIMAL_THRESHOLD = 0.360
-SCREENING_CUTOFF = 0.260
-DIAGNOSTIC_CUTOFF = 0.460
+# Default model and calibrated threshold (WaveLM v4 best model)
+DEFAULT_WAVELM_PATH = "artifacts/models/deep_learning/wavelm_v4/best_model.pt"
+DEFAULT_WAV2VEC2_PATH = "artifacts/models/deep_learning/wav2vec2_v2/best_model.pt"
+
+WAVELM_OPTIMAL_THRESHOLD = 0.310
+ACOUSTIC_OPTIMAL_THRESHOLD = WAVELM_OPTIMAL_THRESHOLD
+SCREENING_CUTOFF = 0.210
+DIAGNOSTIC_CUTOFF = 0.410
 
 # Backward-compatibility reference exports for API endpoints
 META_WEIGHTS = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -39,11 +48,15 @@ META_THRESHOLD = ACOUSTIC_OPTIMAL_THRESHOLD
 
 
 class PatientPredictor:
-    """End-to-end patient inference pipeline."""
+    """End-to-end patient inference pipeline powered by WaveLM v4 best model."""
 
     def __init__(
         self,
-        model_path: Union[str, Path] = "artifacts/models/deep_learning/wav2vec2_v2/best_model.pt",
+        model_path: Union[str, Path] = DEFAULT_WAVELM_PATH,
+        secondary_model_path: Optional[Union[str, Path]] = None,
+        use_ensemble: bool = False,
+        ensemble_weights: tuple = (0.75, 0.25),
+        threshold: Optional[float] = None,
         device: Optional[str] = None,
         duration: float = 8.0,
         sample_rate: int = 16000,
@@ -52,32 +65,59 @@ class PatientPredictor:
         self.device = torch.device(device if device else ("cuda" if torch.cuda.is_available() else "cpu"))
         self.duration = duration
         self.sample_rate = sample_rate
-        self.target_length = int(duration * sample_rate)
         self.num_crops = num_crops
+        self.ensemble_weights = ensemble_weights
 
-        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
-        config = checkpoint.get("config", {})
-        self.duration = float(config.get("duration", duration))
-        self.sample_rate = int(config.get("sample_rate", sample_rate))
-        self.target_length = int(self.duration * self.sample_rate)
-        model_name = config.get("model_name", "facebook/wav2vec2-base")
-        print(f"Loading speech model '{model_name}' from: {model_path} (on {self.device})...")
-        from src.deep_learning.model import build_speech_model
+        def _load_model_and_config(ckpt_path):
+            from src.deep_learning.model import build_speech_model
+            checkpoint = torch.load(ckpt_path, map_location=self.device, weights_only=False)
+            cfg = checkpoint.get("config", {})
+            m_name = cfg.get(
+                "model_name",
+                "microsoft/wavlm-base-plus" if "wavelm" in str(ckpt_path).lower() else "facebook/wav2vec2-base"
+            )
+            num_frozen = cfg.get("num_frozen_layers", checkpoint.get("num_frozen_layers", 4))
+            dropout = cfg.get("dropout", checkpoint.get("dropout", 0.3))
+            model = build_speech_model(
+                model_name=m_name,
+                num_frozen_layers=num_frozen,
+                dropout=dropout,
+                gradient_checkpointing=False,
+            )
+            raw_state_dict = checkpoint["model_state_dict"]
+            state_dict = {k: v for k, v in raw_state_dict.items() if not k.startswith("loss_fn.")}
+            model.load_state_dict(state_dict, strict=True)
+            model.to(self.device)
+            model.eval()
+            return model, cfg, checkpoint
 
-        num_frozen = config.get("num_frozen_layers", checkpoint.get("num_frozen_layers", 4))
-        dropout = config.get("dropout", checkpoint.get("dropout", 0.3))
-        self.model = build_speech_model(
-            model_name=model_name,
-            num_frozen_layers=num_frozen,
-            dropout=dropout,
-            gradient_checkpointing=False,
-        )
-        raw_state_dict = checkpoint["model_state_dict"]
-        state_dict = {k: v for k, v in raw_state_dict.items() if not k.startswith("loss_fn.")}
-        self.model.load_state_dict(state_dict, strict=True)
-        self.model.to(self.device)
-        self.model.eval()
-        self.optimal_threshold = float(checkpoint.get("optimal_threshold", ACOUSTIC_OPTIMAL_THRESHOLD))
+        path1 = Path(model_path) if model_path else None
+        path2 = Path(secondary_model_path) if secondary_model_path else None
+        self.is_ensemble = bool(use_ensemble and path1 and path1.exists() and path2 and path2.exists())
+
+        if self.is_ensemble:
+            print(f">>> [ENSEMBLE] Multi-Backbone Ensemble Initializing on {self.device}")
+            print(f"    - Primary Backbone   (Weight {self.ensemble_weights[0]:.2f}): {path1}")
+            self.model, cfg1, ckpt1 = _load_model_and_config(path1)
+            print(f"    - Secondary Backbone (Weight {self.ensemble_weights[1]:.2f}): {path2}")
+            self.secondary_model, cfg2, ckpt2 = _load_model_and_config(path2)
+            self.duration = float(cfg1.get("duration", duration))
+            self.sample_rate = int(cfg1.get("sample_rate", sample_rate) or sample_rate)
+            self.target_length = int(self.duration * self.sample_rate)
+            self.optimal_threshold = threshold if threshold is not None else 0.298
+            print(f"    - Operating Threshold: {self.optimal_threshold:.3f}")
+        else:
+            active_path = path1 if (path1 and path1.exists()) else path2
+            if not active_path or not active_path.exists():
+                raise FileNotFoundError(f"Model checkpoint not found: {model_path}")
+            print(f">>> Loading single speech model from: {active_path} (on {self.device})...")
+            self.model, cfg, ckpt = _load_model_and_config(active_path)
+            self.secondary_model = None
+            self.duration = float(cfg.get("duration", duration))
+            self.sample_rate = int(cfg.get("sample_rate", sample_rate) or sample_rate)
+            self.target_length = int(self.duration * self.sample_rate)
+            self.optimal_threshold = threshold if threshold is not None else float(ckpt.get("optimal_threshold", ACOUSTIC_OPTIMAL_THRESHOLD))
+            print(f"    - Calibrated Operating Threshold: {self.optimal_threshold:.3f}")
 
     def load_audio(self, audio_path: Union[str, Path]) -> torch.Tensor:
         """Load and preprocess audio to the checkpoint sample rate in mono."""
@@ -85,31 +125,60 @@ class PatientPredictor:
         if not path.exists():
             raise FileNotFoundError(f"Audio file not found: {path}")
 
+        waveform = None
         try:
-            waveform, sr = torchaudio.load(str(path))
-            if waveform.shape[0] > 1:
-                waveform = waveform.mean(dim=0, keepdim=True)
+            raw_wave, sr = torchaudio.load(str(path))
+            if raw_wave.shape[0] > 1:
+                raw_wave = raw_wave.mean(dim=0, keepdim=True)
+            if sr != self.sample_rate:
+                resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=self.sample_rate)
+                raw_wave = resampler(raw_wave)
+            waveform = raw_wave.squeeze(0)
         except Exception:
-            import soundfile as sf
-            data, sr = sf.read(str(path), dtype="float32")
-            if data.ndim > 1:
-                data = data.mean(axis=1)
-            waveform = torch.from_numpy(data).unsqueeze(0)
+            waveform = None
 
-        if sr != self.sample_rate:
-            resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=self.sample_rate)
-            waveform = resampler(waveform)
+        if waveform is None:
+            try:
+                import soundfile as sf
+                data, sr = sf.read(str(path), dtype="float32")
+                if data.ndim > 1:
+                    data = data.mean(axis=1)
+                w = torch.from_numpy(data)
+                if sr != self.sample_rate:
+                    resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=self.sample_rate)
+                    w = resampler(w.unsqueeze(0)).squeeze(0)
+                waveform = w
+            except Exception:
+                waveform = None
 
-        waveform = waveform.squeeze(0)
+        if waveform is None:
+            # Robust ffmpeg decoding for .mpeg, .webm, .m4a, and non-standard audio containers
+            import subprocess
+            cmd = [
+                "ffmpeg", "-v", "error", "-i", str(path),
+                "-f", "f32le", "-ac", "1", "-ar", str(self.sample_rate), "pipe:1"
+            ]
+            try:
+                out = subprocess.check_output(cmd)
+                audio_np = np.frombuffer(out, dtype=np.float32).copy()
+                waveform = torch.from_numpy(audio_np)
+            except Exception as e:
+                raise ValueError(f"Failed to decode audio file '{path.name}': {e}")
+
         if waveform.numel() == 0 or not torch.isfinite(waveform).all():
             raise ValueError("Audio contains no usable finite samples.")
 
         duration_seconds = waveform.shape[0] / self.sample_rate
-        if duration_seconds < self.duration:
+        if duration_seconds < 1.0:
             raise ValueError(
                 f"Recording is too short ({duration_seconds:.2f}s); "
-                f"at least {self.duration:.2f}s of audio is required."
+                f"at least 1.00s of audio is required."
             )
+
+        # Pad with zeros if shorter than target duration (matches training dataset preprocessing)
+        if waveform.shape[0] < self.target_length:
+            pad_len = self.target_length - waveform.shape[0]
+            waveform = torch.nn.functional.pad(waveform, (0, pad_len))
 
         # Peak normalization to [-1.0, 1.0] matching training dataset preprocessing
         max_val = torch.max(torch.abs(waveform))
@@ -137,9 +206,24 @@ class PatientPredictor:
 
         batch = torch.stack(crops, dim=0).to(self.device)
         with torch.no_grad():
-            outputs = self.model(input_values=batch)
-            probs = outputs["probabilities"][:, 1]
-            rec_prob = float(probs.mean().item())
+            outputs1 = self.model(input_values=batch)
+            p1 = float(outputs1["probabilities"][:, 1].mean().item())
+
+            if self.is_ensemble and self.secondary_model is not None:
+                outputs2 = self.secondary_model(input_values=batch)
+                p2 = float(outputs2["probabilities"][:, 1].mean().item())
+
+                # Option B: Bayesian Log-Odds consensus (75% WaveLM v4 + 25% Wav2Vec2 v2)
+                eps = 1e-6
+                p1_c = max(min(p1, 1.0 - eps), eps)
+                p2_c = max(min(p2, 1.0 - eps), eps)
+                z1 = math.log(p1_c / (1.0 - p1_c))
+                z2 = math.log(p2_c / (1.0 - p2_c))
+                w1, w2 = self.ensemble_weights
+                z_ens = w1 * z1 + w2 * z2
+                rec_prob = sigmoid(z_ens)
+            else:
+                rec_prob = p1
 
         return rec_prob
 
@@ -269,12 +353,38 @@ class PatientPredictor:
 def main():
     parser = argparse.ArgumentParser(description="Predict Parkinson's from patient voice recordings")
     parser.add_argument("audio_files", nargs="+", help="Path(s) to patient audio file(s) (.wav, .m4a, .mp3)")
-    parser.add_argument("--model-path", default="artifacts/models/deep_learning/wav2vec2_v2/best_model.pt")
+    parser.add_argument(
+        "--model-path",
+        default=DEFAULT_WAVELM_PATH,
+        help="Primary model checkpoint (default: WaveLM v4 best model)",
+    )
+    parser.add_argument(
+        "--secondary-model-path",
+        default=DEFAULT_WAV2VEC2_PATH,
+        help="Secondary model checkpoint for optional ensemble",
+    )
+    parser.add_argument(
+        "--ensemble",
+        action="store_true",
+        help="Enable multi-backbone ensemble (WaveLM v4 + Wav2Vec2 v2)",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help="Decision threshold (default: auto-selected from checkpoint)",
+    )
     parser.add_argument("--device", default=None, help="Device ('cpu', 'cuda')")
     parser.add_argument("--json", action="store_true", help="Output pure JSON")
     args = parser.parse_args()
 
-    predictor = PatientPredictor(model_path=args.model_path, device=args.device)
+    predictor = PatientPredictor(
+        model_path=args.model_path,
+        secondary_model_path=args.secondary_model_path if args.ensemble else None,
+        use_ensemble=args.ensemble,
+        threshold=args.threshold,
+        device=args.device,
+    )
     report = predictor.predict_patient(args.audio_files)
 
     if args.json:

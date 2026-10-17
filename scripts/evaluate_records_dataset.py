@@ -67,8 +67,25 @@ def parse_args():
     parser.add_argument(
         "--model-path",
         type=str,
+        default="artifacts/models/deep_learning/wavelm_v4/best_model.pt",
+        help="Model checkpoint (default: WaveLM v4 best model)",
+    )
+    parser.add_argument(
+        "--secondary-model-path",
+        type=str,
         default="artifacts/models/deep_learning/wav2vec2_v2/best_model.pt",
-        help="Path to best_model.pt checkpoint to evaluate",
+        help="Secondary model checkpoint for optional ensemble",
+    )
+    parser.add_argument(
+        "--ensemble",
+        action="store_true",
+        help="Enable multi-backbone ensemble (WaveLM v4 + Wav2Vec2 v2)",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help="Decision threshold (default: auto-detected from checkpoint)",
     )
     parser.add_argument(
         "--limit",
@@ -151,6 +168,7 @@ def main():
     print(f" Target Vowels : {'Sustained /a/ (Model Standard Protocol)' if args.vowels == 'a' else 'All Vowels (/a/ and /i/)'}")
     print(f" Audio Type    : {args.audio_type.upper()} WAVs")
     print(f" Inference Dev : {device.upper()}")
+    print(f" Model Engine  : {'Multi-Backbone Ensemble' if args.ensemble else 'WaveLM v4 (Best Model)'}")
     print("--------------------------------------------------------------------------------")
 
     # Load subjects metadata
@@ -162,8 +180,14 @@ def main():
     print("--------------------------------------------------------------------------------")
 
     # Initialize PatientPredictor
-    print(f" Loading model from: {args.model_path}")
-    predictor = PatientPredictor(model_path=args.model_path, device=device)
+    predictor = PatientPredictor(
+        model_path=args.model_path,
+        secondary_model_path=args.secondary_model_path if args.ensemble else None,
+        use_ensemble=args.ensemble,
+        threshold=args.threshold,
+        device=device,
+    )
+    print(f" Operating Decision Threshold: {predictor.optimal_threshold:.3f}")
 
     results = []
     print(f"\n{'Subject ID':<12} | {'Cohort':<6} | {'Files':<5} | {'Mean Rec P':<10} | {'Meta Score':<10} | {'Triage':<11} | {'Result':<12}")
@@ -183,10 +207,10 @@ def main():
 
         try:
             report = predictor.predict_patient(audio_files)
-            meta_score = report.get("meta_classifier_score", 0.0)
+            meta_score = report.get("participant_mean_score", report.get("meta_classifier_score", 0.0))
             mean_p = report.get("distribution_summary", {}).get("mean_probability", 0.0)
             triage = report.get("triage_level", "UNKNOWN")
-            is_pos = meta_score >= META_THRESHOLD
+            is_pos = meta_score >= predictor.optimal_threshold
 
             # Result determination
             if group == "PD":
