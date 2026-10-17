@@ -1,0 +1,16 @@
+{
+  "cross_validated_roc_auc": 0.9392578063209845,
+  "optimal_threshold": 0.25,
+  "metrics": {
+    "accuracy": 0.9481865284974094,
+    "balanced_accuracy": 0.9154196589578918,
+    "sensitivity": 0.8493150684931506,
+    "specificity": 0.9815242494226328,
+    "f1": 0.8920863309352518,
+    "tn": 425,
+    "fp": 8,
+    "fn": 22,
+    "tp": 124
+  },
+  "total_participants": 579
+}
