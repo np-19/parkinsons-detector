@@ -112,7 +112,7 @@ def main() -> None:
         freeze_feature_extractor=True,
         gradient_checkpointing=False,  # No checkpointing needed for eval
     )
-    model.load_state_dict(checkpoint["model_state_dict"])
+    model.load_state_dict(checkpoint["model_state_dict"], strict=False)
     model.to(device)
     model.eval()
 

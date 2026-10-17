@@ -70,7 +70,7 @@ class PatientPredictor:
             dropout=dropout,
             gradient_checkpointing=False,
         )
-        self.model.load_state_dict(checkpoint["model_state_dict"])
+        self.model.load_state_dict(checkpoint["model_state_dict"], strict=False)
         self.model.to(self.device)
         self.model.eval()
 
