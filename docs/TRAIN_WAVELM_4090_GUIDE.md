@@ -1,6 +1,6 @@
-# WaveLM Fine-Tuning Guide on Cloud NVIDIA RTX 4090 (24 GB)
+# WaveLM Fine-Tuning Guide on Cloud GPUs (RTX 3090 / RTX 4090 - 24 GB)
 
-This guide provides step-by-step instructions to train the **WaveLM** (`microsoft/wavelm-base-plus`) speech foundation model on an **AIC Cloud** (or RunPod, Lambda Labs, Vast.ai) instance equipped with an **NVIDIA GeForce RTX 4090 (24 GB VRAM)**.
+This guide provides step-by-step instructions to train the **WaveLM** (`microsoft/wavelm-base-plus`) speech foundation model on an **AIC Cloud** (or RunPod, Lambda Labs, Vast.ai) instance equipped with an **NVIDIA GeForce RTX 3090 (24 GB)** or **RTX 4090 (24 GB)**.
 
 ---
 
@@ -16,14 +16,21 @@ This guide provides step-by-step instructions to train the **WaveLM** (`microsof
 
 ---
 
-## 2. Hardware & Time Profile on RTX 4090
+## 2. Hardware Comparison: RTX 3090 vs. RTX 4090
 
-* **GPU**: 1x NVIDIA RTX 4090 (24 GB VRAM)
-* **Physical Batch Size**: `16` (Physical batch) $\times$ `2` (Gradient accumulation) = **Effective batch size `32`**
-* **Audio Window**: **8.0 seconds** (`128,000` samples @ 16 kHz)
-* **VRAM Utilization**: **~12.8 GB / 24 GB** (Safely within memory budget with PyTorch AMP FP16)
-* **Training Throughput**: ~1.7 minutes per epoch
-* **Total Runtime**: **~30 to 35 minutes** for 20 epochs (with early stopping patience 7)
+| Specification | **NVIDIA RTX 3090** *(Recommended for ₹91 Wallet)* | **NVIDIA RTX 4090** |
+| :--- | :---: | :---: |
+| **Hourly Cost** | **`₹38.80 / hr`** | **`₹77.20 / hr`** |
+| **Max Runtime on ₹91** | **`~2.35 Hours (140 mins)`** *(Safe margin!)* | `~1.15 Hours (70 mins)` *(Tight margin)* |
+| **VRAM Available** | 24 GB GDDR6X | 24 GB GDDR6X |
+| **Batch Size Configuration** | Batch 16, Acc 2 (Effective 32) | Batch 16, Acc 2 (Effective 32) |
+| **VRAM Used / Headroom** | **~12.8 GB / 11.2 GB Free** | **~12.8 GB / 11.2 GB Free** |
+| **Time per Epoch** | ~2.7 minutes | ~1.6 minutes |
+| **Total 20-Epoch Runtime** | **~50 to 58 minutes** | **~30 to 35 minutes** |
+| **Total Job Cost** | **~₹38.80 – ₹45.00** | **~₹77.20** |
+
+> [!TIP]
+> **Wallet Safety**: Because your AIC Cloud balance is **₹91**, the **RTX 3090 is the safer choice**. It finishes within ~55 minutes and costs under **₹45**, leaving you with plenty of wallet balance. Both GPUs have identical 24 GB VRAM and run the exact same batch size and code without changes!
 
 ---
 
@@ -129,3 +136,4 @@ To switch the local or Docker web application to the newly trained WaveLM model:
      sample.wav
    ```
    *Because [`build_speech_model`](../src/deep_learning/model.py) automatically inspects the checkpoint configuration, the web app and inference scripts automatically adapt to WaveLM without needing any code modifications.*
+
