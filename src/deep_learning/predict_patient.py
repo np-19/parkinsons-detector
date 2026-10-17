@@ -70,12 +70,15 @@ class PatientPredictor:
             dropout=dropout,
             gradient_checkpointing=False,
         )
-        self.model.load_state_dict(checkpoint["model_state_dict"], strict=False)
+        raw_state_dict = checkpoint["model_state_dict"]
+        state_dict = {k: v for k, v in raw_state_dict.items() if not k.startswith("loss_fn.")}
+        self.model.load_state_dict(state_dict, strict=True)
         self.model.to(self.device)
         self.model.eval()
+        self.optimal_threshold = float(checkpoint.get("optimal_threshold", ACOUSTIC_OPTIMAL_THRESHOLD))
 
     def load_audio(self, audio_path: Union[str, Path]) -> torch.Tensor:
-        """Load and preprocess audio to 16 kHz mono waveform."""
+        """Load and preprocess audio to 16 kHz mono waveform with peak normalization."""
         path = Path(audio_path)
         if not path.exists():
             raise FileNotFoundError(f"Audio file not found: {path}")
@@ -96,6 +99,10 @@ class PatientPredictor:
             waveform = resampler(waveform)
 
         waveform = waveform.squeeze(0)
+        # Peak normalization to [-1.0, 1.0] matching training dataset preprocessing
+        max_val = torch.max(torch.abs(waveform))
+        if max_val > 1e-6:
+            waveform = waveform / max_val
         return waveform
 
     def infer_single_recording(self, waveform: torch.Tensor) -> float:
@@ -158,35 +165,34 @@ class PatientPredictor:
         # Count-invariant participant acoustic score: arithmetic mean of recording probabilities
         participant_score = mean_p
 
-        # 3-Tier Clinical Triage Framework (Calibrated around validation-selected threshold 0.360)
-        screening_cutoff = SCREENING_CUTOFF
-        diagnostic_cutoff = DIAGNOSTIC_CUTOFF
-        balanced_threshold = ACOUSTIC_OPTIMAL_THRESHOLD
+        # Clinical Triage Framework (Calibrated around validation-selected optimal threshold)
+        balanced_threshold = self.optimal_threshold
+        screening_cutoff = max(0.15, balanced_threshold - 0.10)
+        diagnostic_cutoff = min(0.85, balanced_threshold + 0.10)
 
         if participant_score < screening_cutoff:
             triage_level = "LOW_RISK"
-            participant_verdict = "NEGATIVE (Normal Acoustic Biomarkers)"
+            participant_verdict = "NEGATIVE (Normal Phonation Dynamics)"
             is_pd = False
-            confidence = "High Confidence Negative" if participant_score <= 0.18 else "Normal Voice Dynamics"
-            triage_rec = "Normal phonation dynamics and vocal stability. Routine clinical follow-up recommended."
+            confidence = "High Confidence Negative" if participant_score <= screening_cutoff * 0.7 else "Normal Phonation"
+            triage_rec = "Normal acoustic voice dynamics observed. Routine clinical follow-up as needed."
         elif participant_score < balanced_threshold:
             triage_level = "BORDERLINE"
-            participant_verdict = "BORDERLINE (Mild Dysphonia / Possible ON-State Mask)"
-            is_pd = True  # Flagged for clinical screening triage
-            confidence = "Screening Triage Alert (Sensitivity >80%)"
+            participant_verdict = "BORDERLINE (Mild Acoustic Dysphonia)"
+            is_pd = True  # Flagged for conservative screening follow-up
+            confidence = "Borderline Screening Alert"
             triage_rec = (
-                f"Acoustic micro-tremor detected within sensitivity triage window [{screening_cutoff:.2f}–{balanced_threshold:.2f}]. "
-                "If patient is on Levodopa/Carbidopa, symptoms may be temporarily masked by medication 'ON' state. "
-                "Recommend re-evaluation during morning pre-medication 'OFF' state or clinical review."
+                f"Acoustic features fall within borderline triage window [{screening_cutoff:.2f}–{balanced_threshold:.2f}]. "
+                "Secondary phonation test or clinical review recommended."
             )
         else:
             triage_level = "HIGH_RISK"
-            participant_verdict = "POSITIVE (Manifest Parkinsonian Dysphonia Detected)"
+            participant_verdict = "POSITIVE (Acoustic Dysphonia Detected)"
             is_pd = True
             confidence = "High Confidence Positive" if participant_score >= diagnostic_cutoff else "Moderate Confidence Positive"
             triage_rec = (
-                "Marked acoustic dysphonia and phonation tremor detected. Highly consistent with "
-                "Parkinsonian neuro-motor impairment. Specialist referral to a Neurologist advised."
+                "Acoustic dysphonia and vocal stability degradation detected above decision threshold. "
+                "Specialist neurological evaluation advised."
             )
 
         # Clinical warnings

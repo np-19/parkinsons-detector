@@ -75,6 +75,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-test-samples", type=int, default=None, help="Cap test samples (optional for sanity check)")
     parser.add_argument("--device", type=str, default=None, help="Device ('cuda', 'cpu')")
     parser.add_argument("--fp16", action="store_true", default=True, help="Use FP16 mixed precision")
+    parser.add_argument("--run-meta-classifier", action="store_true", default=False, help="Run exploratory meta-classifier (Note: confounded by recording counts)")
     return parser.parse_args()
 
 
@@ -112,7 +113,9 @@ def main() -> None:
         freeze_feature_extractor=True,
         gradient_checkpointing=False,  # No checkpointing needed for eval
     )
-    model.load_state_dict(checkpoint["model_state_dict"], strict=False)
+    raw_state_dict = checkpoint["model_state_dict"]
+    state_dict = {k: v for k, v in raw_state_dict.items() if not k.startswith("loss_fn.")}
+    model.load_state_dict(state_dict, strict=True)
     model.to(device)
     model.eval()
 
@@ -238,14 +241,14 @@ def main() -> None:
     }).reset_index()
     p_true_top2 = part_top2_df["label"].values.astype(int)
     p_prob_top2 = part_top2_df["prob_PD"].values.astype(float)
-    part_metrics_top2 = compute_metrics(p_true_top2, p_prob_top2, threshold=0.43)
+    part_metrics_top2 = compute_metrics(p_true_top2, p_prob_top2, threshold=optimal_threshold)
 
     # Display results
     print("\n" + "=" * 60)
     print("           HELD-OUT TEST SPLIT EVALUATION RESULTS")
     print("=" * 60)
     print(f"Optimal Threshold (selected on val): {optimal_threshold:.3f}\n")
-    print("--- 1. Baseline Participant-Level (Naive Mean) ---")
+    print("--- 1. Primary Clinical Metric: Participant Mean (Count-Invariant & Leak-Free) ---")
     print(f"  Participants Evaluated:   {len(p_true)}")
     print(f"  Balanced Accuracy:        {part_metrics_opt['balanced_accuracy'] * 100:.2f}%")
     print(f"  Accuracy:                 {part_metrics_opt['accuracy'] * 100:.2f}%")
@@ -256,7 +259,8 @@ def main() -> None:
     print(f"  Confusion Matrix:         TN={part_metrics_opt['confusion_matrix']['tn']}, FP={part_metrics_opt['confusion_matrix']['fp']}, "
           f"FN={part_metrics_opt['confusion_matrix']['fn']}, TP={part_metrics_opt['confusion_matrix']['tp']}")
 
-    print("\n--- 2. Clinical Participant-Level (Top-2 Mean: Medication-Aware) ---")
+    print("\n--- 2. Exploratory: Top-2 Mean Aggregation ---")
+    print("  [DISCLAIMER: Confounded by recording count imbalance (5.16 PD vs 1.72 Control); exploratory only]")
     print(f"  Balanced Accuracy:        {part_metrics_top2['balanced_accuracy'] * 100:.2f}%")
     tp_t2 = part_metrics_top2['confusion_matrix']['tp']
     fn_t2 = part_metrics_top2['confusion_matrix']['fn']
@@ -304,18 +308,21 @@ def main() -> None:
     print(f"\nEvaluation report written to {report_path}")
     print(f"Detailed predictions written to {predictions_path}")
 
-    # Step 4: Run Clinical Participant Meta-Classifier automatically
-    try:
-        from src.deep_learning.meta_classifier import run_meta_classifier
-        meta_report = model_dir / "meta_classifier_report.json"
-        v1_preds = model_dir.parent / "wav2vec2_finetuned" / "test_predictions.csv"
-        run_meta_classifier(
-            v2_preds_path=predictions_path,
-            v1_preds_path=v1_preds if v1_preds.exists() else None,
-            output_report=meta_report,
-        )
-    except Exception as e:
-        print(f"Meta-classifier evaluation skipped: {e}")
+    # Step 4: Run Clinical Participant Meta-Classifier only if explicitly requested
+    if args.run_meta_classifier:
+        try:
+            from src.deep_learning.meta_classifier import run_meta_classifier
+            meta_report = model_dir / "meta_classifier_report.json"
+            v1_preds = model_dir.parent / "wav2vec2_finetuned" / "test_predictions.csv"
+            print("\n--- 4. Participant-Level Distribution Meta-Classifier (Exploratory Ablation) ---")
+            print("  [WARNING: Confounded by recording count imbalance in mPower dataset; exploratory only]")
+            run_meta_classifier(
+                v2_preds_path=predictions_path,
+                v1_preds_path=v1_preds if v1_preds.exists() else None,
+                output_report=meta_report,
+            )
+        except Exception as e:
+            print(f"Meta-classifier evaluation skipped: {e}")
 
 
 if __name__ == "__main__":

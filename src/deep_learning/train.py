@@ -323,7 +323,9 @@ def main() -> None:
     if args.resume_from and Path(args.resume_from).exists():
         print(f"\n[RESUME] Loading checkpoint from {args.resume_from}...")
         ckpt = torch.load(args.resume_from, map_location=device, weights_only=False)
-        model.load_state_dict(ckpt["model_state_dict"], strict=False)
+        raw_state_dict = ckpt["model_state_dict"]
+        state_dict = {k: v for k, v in raw_state_dict.items() if not k.startswith("loss_fn.")}
+        model.load_state_dict(state_dict, strict=True)
         if "optimizer_state_dict" in ckpt:
             try:
                 optimizer.load_state_dict(ckpt["optimizer_state_dict"])
