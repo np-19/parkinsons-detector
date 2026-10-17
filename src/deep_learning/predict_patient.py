@@ -101,10 +101,21 @@ class PatientPredictor:
             waveform = resampler(waveform)
 
         waveform = waveform.squeeze(0)
+        if waveform.numel() == 0 or not torch.isfinite(waveform).all():
+            raise ValueError("Audio contains no usable finite samples.")
+
+        duration_seconds = waveform.shape[0] / self.sample_rate
+        if duration_seconds < self.duration:
+            raise ValueError(
+                f"Recording is too short ({duration_seconds:.2f}s); "
+                f"at least {self.duration:.2f}s of audio is required."
+            )
+
         # Peak normalization to [-1.0, 1.0] matching training dataset preprocessing
         max_val = torch.max(torch.abs(waveform))
-        if max_val > 1e-6:
-            waveform = waveform / max_val
+        if max_val <= 1e-6:
+            raise ValueError("Audio contains no usable phonation; the waveform is silent.")
+        waveform = waveform / max_val
         return waveform
 
     def infer_single_recording(self, waveform: torch.Tensor) -> float:
@@ -138,6 +149,7 @@ class PatientPredictor:
             raise ValueError("At least one audio recording is required.")
 
         recording_results = []
+        failed_recordings = []
         for path in audio_paths:
             try:
                 waveform = self.load_audio(path)
@@ -153,10 +165,17 @@ class PatientPredictor:
                     ),
                 })
             except Exception as e:
+                failed_recordings.append({
+                    "file": str(path),
+                    "error": str(e),
+                })
                 print(f"Warning: Failed to process {path}: {e}", file=sys.stderr)
 
         if not recording_results:
-            raise RuntimeError("No valid audio files could be processed.")
+            details = "; ".join(
+                f"{failure['file']}: {failure['error']}" for failure in failed_recordings
+            )
+            raise RuntimeError(f"No valid audio files could be processed. {details}")
 
         probs = sorted([r["probability_PD"] for r in recording_results])
         n = len(probs)
@@ -211,8 +230,14 @@ class PatientPredictor:
             )
         if std_p >= 0.20 and n >= 2:
             warnings.append(
-                "High variance between recordings detected (std dev > 0.20). This is indicative "
-                "of diurnal motor fluctuation or cyclical ON/OFF Levodopa medication state."
+                "High variance between recordings detected (std dev > 0.20). "
+                "This may reflect recording conditions or within-person variation; "
+                "medication effects were not tested in this evaluation."
+            )
+        if failed_recordings:
+            warnings.append(
+                f"{len(failed_recordings)} recording(s) were not analyzed. "
+                "Review the failed-recording details before interpreting this result."
             )
 
         return {
@@ -237,6 +262,7 @@ class PatientPredictor:
             },
             "clinical_warnings": warnings,
             "recordings_detail": recording_results,
+            "failed_recordings": failed_recordings,
         }
 
 
@@ -270,6 +296,7 @@ def main():
         f"(Decision Threshold: {report['meta_threshold']:.3f})"
     )
     print(f"  Recordings Analyzed:  {report['recordings_analyzed']}")
+    print(f"  Recordings Failed:    {len(report['failed_recordings'])}")
     print("-" * 65)
     print(f"  Triage Recommendation: {report['triage_recommendation']}")
     print("-" * 65)
@@ -282,6 +309,8 @@ def main():
     print("  Recording Details:")
     for i, r in enumerate(report["recordings_detail"], 1):
         print(f"    [{i}] {Path(r['file']).name} ({r['duration_seconds']}s): P(PD) = {r['probability_PD']} -> {r['recording_status']}")
+    for failure in report["failed_recordings"]:
+        print(f"    [Failed] {Path(failure['file']).name}: {failure['error']}")
 
     if report["clinical_warnings"]:
         print("-" * 65)

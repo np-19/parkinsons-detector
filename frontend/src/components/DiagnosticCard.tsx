@@ -187,6 +187,21 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
         </div>
       )}
 
+      {report.failed_recordings?.length > 0 && (
+        <div className="my-5 p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs">
+          <div className="font-semibold text-amber-950 mb-1.5">
+            {report.failed_recordings.length} recording(s) were not analyzed
+          </div>
+          <ul className="list-disc pl-5 text-amber-900 space-y-1">
+            {report.failed_recordings.map((failure) => (
+              <li key={`${failure.filename}:${failure.error}`}>
+                <span className="font-medium">{failure.filename}:</span> {failure.error}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* 3 Key Statistical Moments Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-6">
         <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">

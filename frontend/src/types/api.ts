@@ -5,6 +5,11 @@ export interface RecordingResult {
   recording_status: string;
 }
 
+export interface FailedRecording {
+  filename: string;
+  error: string;
+}
+
 export interface StatisticalDistribution {
   mean_probability: number;
   top2_probability: number;
@@ -28,6 +33,7 @@ export interface PredictionResponse {
   recordings_analyzed: number;
   distribution: StatisticalDistribution;
   recordings: RecordingResult[];
+  failed_recordings: FailedRecording[];
   clinical_warnings: string[];
   timestamp: string;
 }

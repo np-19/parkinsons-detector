@@ -14,7 +14,7 @@ Our Parkinson's Disease detection pipeline operates on raw voice waveforms (sust
 | **1** | **Participant-Level (Test)** | Count-Invariant Mean ($\tau = 0.360$) | **74.72%** | 73.06% | **0.8245** | Production pipeline: arithmetic-mean probability averaging that does not explicitly use recording count as a feature. |
 | **2** | **Participant-Level (Val)** | Validation-Calibrated Mean ($\tau = 0.360$) | **80.09%** | 79.79% | **0.8665** | Checkpoint selection benchmark (580 unseen participants). |
 | **Ext** | **Cross-Cohort (Zero-Shot)** | Raw sustained `/a/` phonation (`records`) | **75.00%** | 75.00% | — | Generalization across independent clinical institutions. |
-| *Clin* | *Clinical Top-2 (Test)* | *Medication-Aware Top-2 Takes* | *81.83%* | *79.27%* | *0.8985* | *Sensitivity-optimized clinical multi-take protocol.* |
+| *Clin* | *Exploratory Top-2 (Test)* | *Top-2 probability aggregation* | *81.83%* | *79.27%* | *0.8985* | *Alternative aggregation comparison; not a medication-effect estimate.* |
 | *Abl* | *Exploratory Ablation* | *Multi-Moment Distribution Meta-Classifier* | *90.86%* | *95.16%* | *0.9346* | *Ablation documenting mPower adherence shortcut.* |
 
 ---
@@ -34,10 +34,13 @@ Because a single recording might happen during an "ON" state, NeuroVocal employs
 2. **Borderline Screening Alert ($0.260 \le P < 0.36$)**: Sensitivity-optimized gate. Flags patients with subtle vocal tremor or potential medication "ON-state" masking for a morning pre-dose re-test or neurological consultation.
 3. **High Risk ($P \ge 0.36$)**: Manifest Parkinsonian dysphonia and phonatory tremor; specialist neurology referral advised.
 
-### C. The Adherence Confounder & Count-Invariant Aggregation
+### C. The Adherence Confounder & Mean Aggregation
 In exploratory analysis, multi-moment distribution features (`max, min, top-2, std dev, count`) achieved an apparent 91.20% balanced accuracy. However, our dataset audit revealed that in mPower, Parkinson's patients submitted significantly more recordings than controls (5.04 vs 1.72 takes on average; 100% of participants with $\ge 3$ takes are PD). Extreme-value statistics (`max` and `min`) naturally shift with sample size ($N$), inadvertently learning study adherence rather than pure vocal tremor. 
 
-To eliminate this shortcut and ensure healthy individuals who take multiple samples are not falsely flagged, production inference standardizes to **Count-Invariant Probability Averaging** ($\bar{P} = \frac{1}{N}\sum P_i$) anchored at $\tau = 0.360$.
+To avoid using recording count as an explicit feature, production inference
+uses arithmetic-mean probability aggregation
+($\bar{P} = \frac{1}{N}\sum P_i$) anchored at $\tau = 0.360$. The mean does not
+guarantee identical reliability for different numbers or qualities of recordings.
 
 ---
 
@@ -71,11 +74,11 @@ steps below are collection guidance, not a claim of diagnostic accuracy:
 ### Step 2: Patient Phonation Instructions
 1. Instruct the patient:
    > *"Take a deep breath, and say 'Aaah' as steadily and continuously as you can at your natural speaking pitch and volume until you run out of breath."*
-2. **Duration**: The recording must be sustained for **at least 8 to 10 seconds**. (The model analyzes an 8.0-second window; recordings shorter than 8s will be automatically zero-padded).
+2. **Duration**: The recording must be sustained for **at least 8 seconds**. Recordings shorter than the checkpoint window or containing only silence are rejected and reported as not analyzed.
 3. **Pitch & Loudness**: Avoid singing, pitch glides, or shouting. The phonation should be steady.
 
 ### Step 3: The Multi-Session Sampling Protocol (The Golden Rule)
-- **Do not rely on a single recording.** Error analysis proved that **62.5% of false negatives occurred when only 1 recording was submitted**, due to Levodopa medication masking.
+- **Do not rely on a single recording.** A single recording may not represent a person's full acoustic variation. Medication effects are a plausible hypothesis, not a demonstrated cause of individual errors in this evaluation.
 - **Protocol**: Capture **2 to 3 recordings across 24–48 hours**:
   - **Sample 1 (Morning "OFF" state)**: First thing in the morning, **before** taking the morning dose of Levodopa.
   - **Sample 2 (Peak "ON" state)**: 1.5 to 2 hours after medication.
@@ -341,7 +344,9 @@ When evaluated as a multi-session clinical assessment:
 2. Peak severity locks on the worst takes: Top-2 $= 0.6159$.
 3. The Meta-Score jumps to **`0.4028` ($\ge 0.29 \rightarrow$ Decisive POSITIVE)**!
 
-This counter-example proves that the AI was designed with **responsible clinical conservatism**: it refuses to issue a life-altering diagnosis on a single borderline snapshot ($P \approx 0.49$), while guaranteeing that the patient is correctly diagnosed as soon as longitudinal fluctuation is captured.
+This historical ablation example illustrates why the exploratory result must not
+be used as a production diagnosis or guarantee. It is retained only as a
+reproducibility and confounding-analysis case study.
 
 ---
 
@@ -403,8 +408,8 @@ To enable clinical decision support at the point of care, the diagnostic pipelin
 | Method | Route | Request Type | Response Model | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/api/health` | None | `HealthResponse` | Returns service health, PyTorch version, active hardware (`cuda:0` / `cpu`), and supported audio formats. |
-| `GET` | `/api/v1/meta-stats` | None | `MetaStatsResponse` | Returns the 10 reference population means, standard deviations, trained weights, and $0.29$ threshold. |
-| `POST` | `/api/v1/predict` | `multipart/form-data`<br>`files: List[UploadFile]` | `PredictionResponse` | **Core Clinical Endpoint**: Evaluates 1 to $N$ voice files, computes order moments, applies the Meta-Classifier, and returns structured diagnosis. |
+| `GET` | `/api/v1/meta-stats` | None | `MetaStatsResponse` | Returns the active checkpoint threshold, derived triage cutoffs, and arithmetic-mean aggregation configuration. |
+| `POST` | `/api/v1/predict` | `multipart/form-data`<br>`files: List[UploadFile]` | `PredictionResponse` | **Core Screening Endpoint**: Evaluates 1 to $N$ voice files, averages recording probabilities, and returns structured triage plus any failed-file details. |
 | `POST` | `/api/v1/predict/single` | `multipart/form-data`<br>`file: UploadFile` | `PredictionResponse` | Convenience endpoint evaluating a single audio file. |
 | `GET` | `/docs` | None | Interactive Swagger UI | OpenAPI interactive documentation for testing endpoints. |
 
@@ -413,7 +418,7 @@ The user interface (`frontend/src/`) is designed around clinical authority, calm
 * **Brand & Logo (`frontend/public/logo.svg`)**: Bespoke vector mark combining acoustic oscillation with a medical cross in Clinical Blue (`#2563EB`).
 * **Microphone Ingestion (`AudioRecorder.tsx`)**: Directly accesses microphone via `navigator.mediaDevices.getUserMedia` with raw audio settings (`autoGainControl: false`, `noiseSuppression: false`), rendering a live real-time `<canvas>` waveform and an 8-second progress countdown ring.
 * **File Upload Dropzone (`Dropzone.tsx`)**: Drag-and-drop zone supporting `.wav`, `.mp3`, `.mpeg`, `.ogg`, `.m4a`, and `.webm` up to 25 MB per file.
-* **Continuous Calibrated Scale (`DiagnosticCard.tsx`)**: Displays patient's Meta-Score along a 0.00 to 1.00 linear scale bar with a physical vertical notch at the clinical decision boundary ($0.29$).
+* **Continuous Calibrated Scale (`DiagnosticCard.tsx`)**: Displays the participant mean along a 0.00 to 1.00 linear scale using thresholds returned by the API.
 * **Automated Pharmacological Guardrails**: Displays conditional alerts explaining Levodopa masking when only one take is analyzed, or verifies multi-session protocol satisfaction when $N \ge 2$.
 * **Print / PDF Summary**: One-click export button formatting the report for patient records or clinical referral.
 
@@ -459,40 +464,45 @@ docker compose logs -f
 
 ---
 
-## 12. 3-Tier Clinical Triage Architecture (Sensitivity >92%)
+## 12. 3-Tier Research Screening Triage
 
 ### A. The Clinical Problem with Rigid Binary Thresholds
-In clinical screening (especially for neurodegenerative disorders), a rigid binary classification (PD vs. Non-PD) creates dangerous failure modes:
-1. **Medication Masking**: A patient taking Levodopa may present during an "ON" period with a score of `0.24`. Under a rigid `0.29` cutoff, they are dismissed as "Healthy" without further investigation.
-2. **Early Hoehn & Yahr Stage 1**: Mild unilateral symptoms with subtle vocal tremor can fall right below a strict diagnostic boundary.
-3. **Screening vs. Diagnostic Objectives**: A screening test requires **high sensitivity ($\ge 90\%$)** to avoid missing true patients, while a specialist diagnostic test requires **high specificity ($>98\%$)** to prevent unnecessary interventions.
+The application reports a research-grade acoustic screening result, not a
+clinical diagnosis. A score can vary with recording quality, cohort, disease
+stage, and medication state. Medication effects are a future hypothesis to test
+with medication-timing metadata, not a causal conclusion from this evaluation.
 
 ### B. The 3-Tier Triage Framework
-NeuroVocal implements a calibrated **3-Tier Clinical Triage System**:
+NeuroVocal implements a calibrated **3-Tier Research Screening Triage**:
 
 ```
-[0.00 ────────────── 0.20 ────────────── 0.29 ────────────── 0.35 ────────────── 1.00]
-     LOW RISK               BORDERLINE TRIAGE                HIGH RISK
-   (Green Zone)               (Amber Zone)                   (Red Zone)
-  Healthy Voice            Sens >92% Screening Alert     Spec >99% Definitive Dysphonia
+[0.00 ────────────── 0.260 ────────────── 0.360 ────────────── 1.00]
+       LOW RISK              BORDERLINE              HIGH RISK
+      (Green Zone)           (Amber Zone)             (Red Zone)
 ```
 
 | Triage Tier | Score Band | Effective Metric | Clinical Interpretation | Actionable Decision Support |
 | :--- | :---: | :---: | :--- | :--- |
-| **LOW RISK (Green)** | $< 0.20$ | Specificity $\approx 90\%$ | Normal vocal dynamics; no acoustic tremor. | Routine preventative checkup. |
-| **BORDERLINE (Amber)** | $0.20 \le P < 0.35$ | **Sensitivity $> 92\%$** | Mild dysphonia or Levodopa "ON-state" mask. | Re-evaluate in morning pre-medication "OFF" state or schedule clinical review. |
-| **HIGH RISK (Red)** | $\ge 0.35$ | **Specificity $> 99\%$** | Marked dysphonia, tremor, and motor rigidity. | Priority referral to Movement Disorder Specialist / Neurologist. |
+| **LOW RISK (Green)** | $P < 0.260$ | No individual guarantee | Below the derived screening cutoff; does not rule out disease. | Routine clinical follow-up as appropriate. |
+| **BORDERLINE (Amber)** | $0.260 \le P < 0.360$ | No individual guarantee | Screening alert requiring cautious interpretation. | Review recording quality and consider clinical follow-up. |
+| **HIGH RISK (Red)** | $P \ge 0.360$ | No individual guarantee | Acoustic alert above the validation-selected threshold. | Specialist evaluation may be appropriate; this is not a diagnosis. |
 
 ### C. Clinical Impact
-By introducing the Amber Borderline Triage tier between $0.20$ and $0.35$, the application raises **effective screening sensitivity over $92\%$**, while maintaining a pure green zone where false positives are virtually zero.
+These bands organize the API result for research use. They do not establish
+screening sensitivity, specificity, or clinical utility beyond the reported
+held-out and external-cohort metrics.
 
 ### D. The Biological Ceiling of Voice Biomarkers (~88%) & Multimodal Screening
 1. **The Biological Ceiling of Laryngeal Manifestation**:
-   Neurological literature (*Sapir et al., 2008*, *Ramig et al., 2008*) confirms that hypokinetic dysarthria manifests in approximately 70% to 89% of Parkinson's patients. In early **Hoehn & Yahr Stage 1**, approximately **10% to 12% of Parkinson's patients present with isolated unilateral limb tremor without any vocal fold impairment**.
+   Voice involvement varies across people and disease stages, so an acoustic
+   screening result cannot be assumed to detect every patient.
 2. **Clinical Implications**:
-   Because an acoustic model evaluates physical vocal neuromuscular instability, it cannot detect disease in vocal folds that are physiologically healthy. An empirical acoustic sensitivity of **87.7%** on unconstrained home smartphone recordings sits near the theoretical biological ceiling for voice alone.
+   Because an acoustic model evaluates vocal signals, it may miss disease
+   without measurable vocal manifestations. The current evaluation does not
+   establish a biological sensitivity ceiling.
 3. **Multimodal Recommendation**:
-   To catch the remaining 10–12% of early-stage patients whose voice is physically unaffected, NeuroVocal is designed to serve as the front-line acoustic triage component of a comprehensive multimodal screening protocol that includes smartphone accelerometer finger-tapping and gait analysis.
+   Future work may combine voice with other modalities such as finger tapping
+   or gait, but those modalities are outside the current validated system.
 
 ---
 

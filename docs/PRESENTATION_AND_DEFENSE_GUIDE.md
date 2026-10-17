@@ -12,7 +12,7 @@
 | **Dataset** | mPower Mobile Parkinson Study (Sage Bionetworks, *Nature Biotechnology*). |
 | **Scale** | 9,986 audio recordings across 3,868 real-world participants. |
 | **Partitioning** | **Strict Participant-Level Isolation**: Assigned split sizes are Train (2,707), Validation (580), Test (581). The current evaluated test report contains 579 participants after audio-processing/evaluation exclusions; these counts must not be conflated. |
-| **Core Architecture** | Pretrained `wav2vec2-base` (8 unfrozen layers) + Temporal Attention Pooling + Count-Invariant Triage. |
+| **Core Architecture** | Pretrained `wav2vec2-base` (8 unfrozen layers) + Temporal Attention Pooling + Arithmetic-Mean Research Triage. |
 | **Grounded Performance** | **`80.09%` Validation Balanced Accuracy** (`0.8665` ROC-AUC); **`74.72%` Held-Out Test Balanced Accuracy** (`0.8245` ROC-AUC); **`75.00%` External Multi-Cohort Generalization** (`86.36%` PD sensitivity). |
 
 ---
@@ -49,7 +49,7 @@
               │
               │
               ▼
-[Count-Invariant Production Aggregation & Triage]
+[Arithmetic-Mean Production Aggregation & Research Triage]
 ├── Aggregation: Arithmetic Mean P_mean = (1/N) sum(P_i)
 ├── Decision Threshold: tau = 0.360 (Validation-Calibrated)
 └── 3-Tier Clinical Triage:
@@ -59,7 +59,7 @@
               │
               ▼
 [Final Decision: Clinical Report & Triage Recommendation]
-(Exploratory Ablation: Multi-Moment Distribution Meta-Classifier available via evaluate.py Section 4)
+(Exploratory multi-moment ablation is not used by production inference)
 ```
 
 ---
@@ -83,11 +83,11 @@
   * Recording-Level Test Metrics: Balanced Accuracy **`71.22%`**, ROC-AUC **`0.7853`**
 * **Gain**: Balanced accuracy increased from 67.5% $\rightarrow$ **80.09%** on validation participants and **74.72%** on test participants.
 
-### Phase 3: Adherence Confounding Analysis & Count-Invariant Aggregation (Final Architecture)
+### Phase 3: Adherence Confounding Analysis & Mean Aggregation (Final Architecture)
 * **Exploratory Finding**: Unconstrained distribution statistics (`max, min, top-2, std, count`) reached **`90.86%`** balanced accuracy (0.9346 ROC-AUC, 99.54% specificity) by inadvertently exploiting mPower's recording-count imbalance (PD patients averaged 5.0 takes vs 1.7 for controls; 100% of participants with $\ge 3$ takes in the test split are PD).
-* **Production Resolution**: Standardized to **Count-Invariant Probability Averaging** ($\tau = 0.360$) and 3-tier clinical triage:
-  * **Baseline Test (Count-Invariant Mean)**: **`74.72%` Balanced Accuracy**, **`0.8245` ROC-AUC** (114/146 PD detected, 309/433 controls cleared).
-  * **Clinical Top-2 Aggregation (Medication-Aware)**: **`81.83%` Balanced Accuracy**, **`0.8985` ROC-AUC** (Catches 127/146 PD patients = 86.99% sensitivity, 332/433 controls cleared = 76.67% specificity).
+* **Production Resolution**: Standardized to arithmetic-mean probability aggregation ($\tau = 0.360$) and 3-tier research triage. The mean does not include recording count as an explicit feature, but its reliability can still vary with recording number and quality:
+  * **Baseline Test (Participant Mean)**: **`74.72%` Balanced Accuracy**, **`0.8245` ROC-AUC** (114/146 PD detected, 309/433 controls cleared).
+  * **Exploratory Top-2 Aggregation**: **`81.83%` Balanced Accuracy**, **`0.8985` ROC-AUC**; an alternative aggregation comparison, not evidence of medication effects.
   * **External Multi-Cohort Validation (`records`)**: **`75.00%` Balanced Accuracy** (19/22 PD = 86.36% sensitivity, 20/21 MSA = 95.2% dysphonia detection).
 
 ---
@@ -95,27 +95,24 @@
 ## 4. Key Clinical Insights & Viva/Defense Questions
 
 ### Q1: "Does your model falsely catch healthy control patients more?"
-> **Answer**: **No. The false alarm rate is well-controlled across all evaluation modes.**
+> **Answer**: **The held-out test result is the relevant production estimate.** Alternative aggregation results are exploratory comparisons and should not be presented as clinical guarantees.
 > In Model 1, specificity was low (46.7%). In our Model 2 evaluation on 433 completely unseen healthy controls in the held-out test split:
-> * **Production Count-Invariant Mean ($\tau = 0.360$)**: **`71.36% Specificity`** (309 of 433 controls correctly cleared; TN=309, FP=124).
-> * **Clinical Top-2 Aggregation**: **`76.67% Specificity`** (332 of 433 controls correctly cleared; TN=332, FP=101).
+> * **Production Participant Mean ($\tau = 0.360$)**: **`71.36% Specificity`** (309 of 433 controls correctly cleared; TN=309, FP=124).
+> * **Exploratory Top-2 Aggregation**: **`76.67% Specificity`** (332 of 433 controls correctly cleared; TN=332, FP=101).
 > * **Exploratory Distribution Meta-Classifier (Ablation)**: **`99.54% Specificity`** (431 of 433 controls correctly cleared; only 2 false alarms; TN=431, FP=2).
 
 ### Q2: "Why were some Parkinson's patients missed (False Negatives)?"
-> **Answer**: **The primary driver of false negatives is pharmacological masking (Levodopa "ON" state).**
-> Parkinson's symptoms fluctuate dramatically throughout the day due to **Levodopa dopaminergic medication**:
-> * During the **"ON" medication state** (1–3 hours after taking medication), throat muscle rigidity and vocal tremor temporarily normalize.
-> * If a patient submits only 1 recording while medicated, their vocal folds are temporarily stable, giving the algorithm no physical acoustic tremor to detect.
+> **Answer**: **The cause of individual false negatives was not established by this evaluation.** Medication-state variation is a plausible hypothesis that requires medication-timing metadata and a dedicated study.
 > * In baseline single-mean aggregation, 32 patients were missed (78.08% sensitivity).
-> * When applying our **Clinical Top-2 Aggregation** (which accounts for diurnal medication cycles across takes), **Sensitivity jumps to `86.99%`** (127 of 146 true PD patients detected, reducing false negatives from 32 down to only 19!).
+> * The exploratory Top-2 result differs from the mean result, but it does not establish that diurnal medication cycles caused the difference.
 
 ### Q3: "What is your clinical recommendation based on this finding?"
-> **Answer**: We recommend considering a **multi-session screening protocol**: patients can record 2 to 3 voice samples over 24–48 hours (e.g., morning before taking morning medication, and evening when medication wears off). This may expose medication-state variation, but its clinical benefit requires independent validation and does not overcome masking in every case.
+> **Answer**: Multiple recordings may characterize within-person variation, but any medication-timing protocol and clinical benefit require independent validation.
 
 ### Q4: "Why did you use 8.0-second windows instead of the full audio?"
 > **Answer**: 
 > 1. **Noise Filtering**: The first 0.5–1.0s of smartphone audio contains gasping/inhalation and mic handling noise. The final 1–2s contains voice trail-off and screen tapping. The 8.0s middle window isolates pure steady-state phonation.
-> 2. **Variable Length Rectangular Batches**: In mPower, breath capacity ranges from 3.5s (severe PD) to 12s+ (controls). Unclipped audio would require padding with 70%+ artificial silence zeros.
+> 2. **Fixed Input Contract**: The production inference path requires at least 8 seconds of usable audio and rejects shorter or silent files rather than scoring artificial padding as if it were phonation.
 > 3. **Transformer Complexity**: Self-attention scales as $O(T^2)$. 8.0s (~399 time frames) is computationally optimal on GPUs while capturing 30–50 full vocal tremor cycles (Parkinsonian tremor is 4–7 Hz).
 > 4. **Dynamic Shifting Augmentation**: Randomly slicing 8s windows during training acts as natural data augmentation, exposing the network to different temporal segments across epochs.
 
@@ -123,7 +120,7 @@
 > **Answer**: In the official **Sage Bionetworks DREAM Parkinson's Challenge** (evaluated on this exact held-out participant split of mPower):
 > * Median participant-level score: ~0.68 – 0.72 ROC-AUC.
 > * Top winning international research teams: **0.78 – 0.82 ROC-AUC**.
-> * **Our System**: **`0.8665 Validation ROC-AUC`** and **`0.8245 Held-Out Test ROC-AUC`** (with **`0.8985 ROC-AUC`** under Top-2 clinical aggregation) using pure, count-invariant acoustic representations. Our model achieves competitive performance directly comparable to published benchmarks without using demographic or non-acoustic leakage.
+> * **Our production system**: **`0.8665 Validation ROC-AUC`** and **`0.8245 Held-Out Test ROC-AUC`** using arithmetic-mean acoustic aggregation. The Top-2 result is an exploratory comparison, not the production result.
 
 ### Q6: "Why couldn't you use the UCI Parkinson's Dataset?"
 > **Answer**: The UCI dataset contains **zero raw audio files** — it is only a static CSV table of 22 pre-calculated acoustic numbers from 31 people recorded with studio microphones in 2007. Our model is a modern raw-waveform deep neural network (Wav2Vec2) processing 128,000 audio samples from 3,868 smartphone participants in real-world acoustic conditions.
@@ -135,7 +132,7 @@
 > * In the test set, **100% of participants with $\ge 3$ takes (125 out of 125) were Parkinson's patients**.
 > * A statistical model with extreme-value features (`max`, `min`, `std`) inadvertently learns sample size ($N$) rather than vocal cord dynamics, since more draws from any distribution produce higher sample maxima and lower minima.
 > * When we controlled for count (subsampling all participants to fixed $K=2$), the meta-classifier achieved **0.770 AUC**, showing no benefit over simple probability averaging (**0.775 AUC**).
-> * **Clinical Resolution**: To guarantee scientific integrity and prevent healthy users who take multiple samples from being falsely flagged, we refactored production inference to **Count-Invariant Probability Averaging** ($\tau = 0.360$), which legitimately achieves **80.09% validation balanced accuracy (0.8665 AUC)**, **74.72% test balanced accuracy (0.8245 AUC)**, **81.83% clinical Top-2 balanced accuracy (0.8985 AUC)**, and **75.00% external multi-cohort generalization (86.36% PD sensitivity)**.
+> * **Production resolution**: We refactored production inference to arithmetic-mean probability aggregation ($\tau = 0.360$), which achieves **80.09% validation balanced accuracy (0.8665 AUC)** and **74.72% test balanced accuracy (0.8245 AUC)**. The Top-2 result is exploratory.
 
 ### Q8: "Why do we have Model 1 and Model 2? Do we need Model 1 for Model 2 to work?"
 > **Answer**: **No, you do not need Model 1 for Model 2 to run.**
@@ -147,22 +144,17 @@
 
 ### Q9: "How is the clinical aggregation structured in production vs. the ablation study?"
 > **Answer**: They are cleanly separated by design:
-> 1. **Production Pipeline (`predict_patient.py`, web app backend)**: Uses **Count-Invariant Probability Averaging** ($\bar{P}$) anchored to the validation threshold ($\tau = 0.360$) and stratified into 3-tier clinical triage. This guarantees that diagnostic scores depend solely on vocal cord acoustics, completely unaffected by how many takes a patient submits.
+> 1. **Production Pipeline (`predict_patient.py`, web app backend)**: Uses arithmetic-mean aggregation ($\bar{P}$) anchored to the validation threshold ($\tau = 0.360$) and stratified into 3-tier research triage. Recording count is not supplied as an explicit feature, but the estimate can still vary with recording number and quality.
 > 2. **Ablation Study (`meta_classifier.py`, Section 4 in `evaluate.py`)**: Runs the 10-moment Logistic Regression model as an academic ablation report to demonstrate and document the mPower recording adherence confounder.
 
 ### Q10: "How should a patient or doctor best use this app in real life?"
 > **Answer**: We established a 3-step Standard Operating Procedure (see `docs/CLINICAL_AND_USER_GUIDE.md`):
 > 1. **Acoustic Environment**: Quiet room ($<45\text{ dBA}$ ambient noise), phone held 15–20 cm away at a 45-degree angle.
-> 2. **Phonation Task**: Deep breath, sustained continuous "Aaah" at steady natural pitch for at least 8 to 10 seconds.
-> 3. **The Multi-Session Protocol (Crucial)**: Capture 2 to 3 recordings over 24–48 hours (e.g. morning before morning Levodopa dose, and afternoon/evening). This completely eliminates pharmacological masking, lifting sensitivity to **86.99% – 91.6%**.
+> 2. **Phonation Task**: Deep breath, sustained continuous "Aaah" at steady natural pitch for at least 8 seconds.
+> 3. **Repeated samples (future validation)**: Additional recordings may characterize within-person variation, but no medication-timing benefit or sensitivity increase was established by this evaluation.
 
 ### Q11: "What is the real-world accuracy on a single new recording if medicine conditions are followed?"
-> **Answer**:
-> * **If a Parkinson's patient records in their unmedicated morning 'OFF' state**: The model has an **`86% to 92%`** probability of detecting parkinsonian dysphonia on that single recording.
-> * **If a Healthy individual records in a quiet room**: The model has a **`71% to 77%`** probability of clearing them as healthy on a single shot.
-> * **Combined Single-Recording Real-World Accuracy**: **`~75%`** on test sets and external clinical cohorts.
-> * **Why not 90%+ on a single shot?** A single breath snapshot is subject to non-disease noise (throat tickles, morning dryness, breath capacity fatigue, Levodopa timing).
-> * **The 'Power of Multi-Session'**: Adding follow-up confirmation samples across the diurnal cycle overcomes pharmacological masking, elevating clinical Top-2 balanced accuracy to **`81.83%`** (0.8985 ROC-AUC, 86.99% sensitivity).
+> **Answer**: The measured participant-level production result is **74.72% balanced accuracy** on 579 evaluated held-out participants, with **0.8245 ROC-AUC**. This cohort-level result is not an individual accuracy guarantee. Additional samples and medication-state protocols require independent validation.
 
 ### Q12: "Does `model.py` load the weights from `artifacts/`? How are the architecture and weights decoupled?"
 > **Answer**: No. `model.py` is strictly the **architectural blueprint** defining the PyTorch `nn.Module` class (`Wav2Vec2ForParkinsons`). It contains zero hardcoded checkpoint paths.
@@ -174,7 +166,11 @@
 > * **Stage 1 (Wav2Vec 2.0 Base + Attention Head)**: Performs acoustic feature extraction directly on raw waveform samples to catch non-linear phonatory micro-tremors and glottal dysarthria ($71.22\%$ recording-level balanced accuracy).
 > * **Stage 2 Ablation (Logistic Regression)**: Tested whether modeling distribution moments ($\mu, \max, \min, \text{top}_2, p_{75}, \sigma, \ln(N+1)$) could overcome Levodopa "ON"-state masking. While it scored 90.86% balanced accuracy and 0.9346 ROC-AUC, our ablation proved this was largely driven by mPower's recording-count adherence confounder. Consequently, production inference was transitioned to count-invariant averaging.
 
-### Q14: "How does the Meta-Classifier operate on a single recording versus multiple recordings?"
+> **Historical-ablation note:** The following questions describe the exploratory
+> meta-classifier analysis only. They do not describe the production API,
+> production thresholds, or current frontend triage.
+
+### Q14: "How did the exploratory Meta-Classifier operate on a single recording versus multiple recordings?"
 > **Answer**:
 > * **Multiple Recordings ($N \ge 2$)**: Evaluates full longitudinal variance ($\sigma$) and peak severity ($\text{top}_2$), accurately separating steady controls from fluctuating Parkinson's patients.
 > * **Single Recording ($N = 1$)**: Order statistics mathematically collapse to the single probability value, and variance collapses to zero ($\sigma = 0.0$). The engine automatically flags a mandatory medical advisory warning that Levodopa masking cannot be ruled out and recommends capturing 2–3 takes over 24 hours.
@@ -216,7 +212,7 @@
 > * **The Clinical Verdict**:
 >   When evaluated together across sessions as required by the clinical SOP, the patient's true multi-moment Meta-Score is **`0.4028` ($\ge 0.29 \rightarrow$ Decisive POSITIVE)**!
 > * **Key Takeaway for Defense**:
->   This counter-example proves that the AI is not a naive threshold detector. It actively protects patients from false alarms caused by transient morning throat dryness, while the multi-session protocol and automated warning box guarantee that true fluctuating Parkinson's patients are correctly identified.
+>   This historical ablation case is illustrative only; it does not prove a medication cause, establish clinical benefit, or guarantee that additional recordings identify a patient.
 
 ### Q19: "Where did the population statistics ($\mu, \sigma$) and weights ($+1.242, +1.948, +1.104$) come from?"
 > **Answer**: They are empirical and learned parameters directly calculated from the 579 participants in the mPower cohort:
@@ -245,65 +241,25 @@
 >    * **Security & Footprint**: The public-facing Nginx container has zero Python dependencies or compilers.
 >    * **Independent Deployment**: The frontend can be deployed to global edge CDNs (Vercel, Cloudflare Pages), while the backend runs on a dedicated compute server.
 
-### Q21: "Why was the cutoff threshold chosen as 0.29? Is it different for the base model versus the meta-classifier, and why?"
-> **Answer**: Yes, they operate with different thresholds because they solve different mathematical and clinical problems:
-> 
-> | Level | Model | Operating Threshold | Optimization Target | What It Classifies |
-> | :--- | :--- | :---: | :--- | :--- |
-> | **Acoustic Stage 1** | Wav2Vec 2.0 Base | **$\tau = 0.360$** | Recording-level balanced accuracy on validation audio | Does this 8-second audio clip exhibit vocal dysarthria/tremor? |
-> | **Clinical Stage 2** | Multi-Moment Meta-Classifier | **$\tau = 0.290$** | Patient-level Youden's Index across 5-fold cross-validation | Does this human patient have Parkinson's Disease? |
-> 
-> * **How 0.360 was Chosen for the Base Model**:
->   During validation epoch checkpointing, `find_best_participant_threshold` scanned thresholds from $0.10$ to $0.90$. The value $0.360$ maximizes balanced accuracy on individual audio clips, separating normal speech from acoustic micro-instabilities.
-> * **How 0.29 was Chosen for the Meta-Classifier**:
->   In `src/deep_learning/meta_classifier.py` (lines 125–132), an empirical grid search across candidate thresholds $t \in [0.15, 0.80]$ was conducted over the 579 participants. The threshold $0.29$ achieved the global peak in **Balanced Accuracy ($91.20\%$)**, with **$83.56\%$ Sensitivity** (122 / 146 true PD patients) and **$98.85\%$ Specificity** (428 / 433 controls correct — only 5 false alarms out of 433).
-> * **Why not the naive 0.50 default?**:
->   A default $0.50$ threshold assumes equal class balance and symmetrical cost of errors. In medical screening, a False Negative (missing a neurodegenerative disease) is far more dangerous than a False Positive (prompting a clinical follow-up). At $0.50$, sensitivity drops to ~65%, missing early-stage or medicated patients. The $0.29$ threshold balances sensitivity ($83.6\%$) while maintaining near-perfect specificity ($98.85\%$).
+### Q21: "Why did the historical ablation use a cutoff of 0.29?"
+> **Answer**: This was a threshold selected within the exploratory test-prediction
+> analysis. It is not used by the production mean-aggregation pipeline. Production
+> inference loads the checkpoint threshold (0.360 in the documented checkpoint)
+> and derives 0.260/0.460 triage cutoffs.
 
-### Q22: "Can sensitivity be pushed over 90%? How does your system achieve this in clinical practice?"
-> **Answer**: Yes, absolutely. With our Cross-Validated ROC-AUC of **0.934**, sensitivity can easily be pushed beyond 90% by moving along the empirical ROC curve:
->
-> 1. **The Specificity Capital**:
->    At $\tau = 0.290$, the model has **$98.85\%$ Specificity** (only 5 false alarms out of 433 controls). In clinical triage, we have substantial "specificity capital" to trade: shifting the decision boundary to $\tau = 0.200$ raises Sensitivity to **$\ge 91.5\%$** while retaining $\sim 88\%$ Specificity.
-> 2. **The 3-Tier Clinical Triage Architecture (Implemented in UI & Backend)**:
->    Rather than forcing a rigid binary threshold, NeuroVocal implements a 3-tier risk framework:
->    * **Low Risk ($P < 0.20$)**: Normal voice dynamics (Healthy Control).
->    * **Borderline Screening Alert ($0.20 \le P < 0.35$)**: Sensitivity **$>92\%$**. Flags patients with mild dysphonia or Levodopa "ON-state" masking for a morning pre-dose re-test or neurological follow-up.
->    * **High Risk ($P \ge 0.35$)**: Specificity **$>99\%$**. Manifest dysphonia; immediate specialist referral.
-> 3. **Protocol & Multimodal Expansion**:
->    * **Multi-take requirement ($\ge 3$ takes)**: Eliminates single-take diurnal variability and medication ON-state false negatives.
->    * **Diadochokinetic syllables (`/pa-ta-ka/`)**: Adding rapid articulatory syllables alongside sustained `/a/` pushes sensitivity over $95\%$.
+### Q22: "Can sensitivity be pushed over 90%?"
+> **Answer**: A decision threshold can trade sensitivity against specificity, but
+> the current project does not establish a clinically validated operating point
+> above 90%. The production result to report is 74.72% balanced accuracy and
+> 0.8245 ROC-AUC on 579 held-out participants. Any new threshold must be selected
+> on validation data and evaluated once on an untouched test cohort.
 
-### Q23: "Why does voice-only sensitivity plateau around ~88%? What is the biological ceiling of acoustic biomarkers?"
-> **Answer**: In clinical neurology, acoustic-only screening faces a well-documented **biological ceiling of ~88–90%**:
->
-> ```text
-> ========================================================================================
->   CROSS-VALIDATED OPERATING SPECTRUM (Total Cohort: 579 | PD: 146 | Control: 433)
->   Overall ROC-AUC: 0.9261
-> ========================================================================================
->   Cutoff (t)   | Clinical Role            | Sensitivity   | Specificity   | PD Caught 
->   ------------------------------------------------------------------------------------
->   0.12         | Ultra-Sensitive Gate     |  87.67%       |  88.91%       | 128/146 PD
->   0.15         | Low Screening Cutoff     |  86.30%       |  92.61%       | 126/146 PD
->   0.18         | Early Detection Gate     |  85.62%       |  94.46%       | 125/146 PD
->   0.20         | 3-Tier Screening Cutoff  |  85.62%       |  95.61%       | 125/146 PD
->   0.22         | Conservative Screening   |  84.93%       |  97.00%       | 124/146 PD
->   0.26         | Youden Peak Cutoff       |  83.56%       |  98.85%       | 122/146 PD
->   0.29         | Balanced Diagnostic Cutoff | 82.88%      |  99.31%       | 121/146 PD
->   0.35         | 3-Tier High-Risk Cutoff  |  80.82%       |  99.31%       | 118/146 PD
->   0.50         | Standard Naive Cutoff    |  76.71%       | 100.00%       | 112/146 PD
-> ========================================================================================
-> ```
->
-> * **1. Hypokinetic Dysarthria Prevalence (~70%–89%)**:
->   Extensive neurological literature (*Logemann et al.*, *Sapir et al., 2008*, *Movement Disorder Society*) establishes that vocal cord motor impairment is present in approximately 70% to 89% of Parkinson's patients. Roughly **10% to 12% of true Parkinson's patients have completely normal laryngeal neuromuscular control**.
-> * **2. Hoehn & Yahr Stage 1 Localization**:
->   In early-stage Parkinson's (H&Y Stage 1), neurodegeneration is frequently restricted to unilateral peripheral motor circuits (e.g., resting finger tremor or gait stiffness). Because their vocal cord tension, harmonic-to-noise ratio, and pitch perturbation are physically normal, an acoustic algorithm cannot detect pathology that does not exist in the sound wave.
-> * **3. The Levodopa ON-State Dilution**:
->   In the mPower test cohort, 11 of the 18 missed PD patients had raw acoustic probabilities that never exceeded `0.20` across any recording. These participants recorded during their peak Levodopa/Carbidopa "ON" period, which pharmacologically restored vocal fold motor stability.
-> * **4. Why 87.7% is a Medically Sound Screening Result**:
->   An acoustic system claiming 99% sensitivity on unconstrained voice alone is either severely overfitted or suffering from patient data leakage. By pairing our **87.7% acoustic sensitivity** with **3-Tier Triage (flagging borderline patients for morning pre-dose re-test)** and multimodal motor tests (accelerometer finger tapping / gait), true end-to-end clinical sensitivity exceeds 95%.
+### Q23: "What are the main limitations and next steps?"
+> **Answer**: The system is a research-grade voice screening prototype, not a
+> diagnostic device. Important next steps are independent-cohort validation,
+> explicit evaluation of short/noisy recordings, medication-timing metadata,
+> and a controlled WavLM comparison using the same participant splits,
+> preprocessing, threshold-selection procedure, and metrics.
 
 ---
 

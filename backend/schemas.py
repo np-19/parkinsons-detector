@@ -15,6 +15,12 @@ class RecordingResult(BaseModel):
     )
 
 
+class FailedRecording(BaseModel):
+    """Audio file that could not be evaluated."""
+    filename: str
+    error: str
+
+
 class StatisticalDistribution(BaseModel):
     """Longitudinal statistical moments across multiple recording takes."""
     mean_probability: float = Field(..., description="Arithmetic mean of raw probabilities")
@@ -50,6 +56,10 @@ class PredictionResponse(BaseModel):
     recordings_analyzed: int = Field(..., description="Count of recordings analyzed")
     distribution: StatisticalDistribution = Field(..., description="Statistical distribution metrics")
     recordings: List[RecordingResult] = Field(..., description="Breakdown of each recording evaluated")
+    failed_recordings: List[FailedRecording] = Field(
+        default_factory=list,
+        description="Uploaded recordings rejected before model inference",
+    )
     clinical_warnings: List[str] = Field(default_factory=list, description="Clinical advisories and pharmacological masking warnings")
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
 

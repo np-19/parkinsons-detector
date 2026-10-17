@@ -188,7 +188,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--head-learning-rate", type=float, default=1e-4, help="Learning rate for classification head")
     parser.add_argument("--weight-decay", type=float, default=0.01, help="Weight decay")
     parser.add_argument("--warmup-ratio", type=float, default=0.1, help="Warmup ratio for cosine scheduler")
-    parser.add_argument("--duration", type=float, default=5.0, help="Audio segment duration in seconds")
+    parser.add_argument(
+        "--duration",
+        type=float,
+        default=8.0,
+        help="Audio segment duration in seconds (matches the production checkpoint)",
+    )
     parser.add_argument("--num-frozen-layers", type=int, default=6, help="Number of lower Transformer layers to freeze (0-11)")
     parser.add_argument("--fp16", action="store_true", help="Enable PyTorch mixed precision (AMP fp16)")
     parser.add_argument("--gradient-checkpointing", action="store_true", help="Enable gradient checkpointing (recommended for GTX 1650)")
@@ -514,4 +519,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

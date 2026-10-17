@@ -44,6 +44,7 @@ def test_schema_serialization():
         recordings_analyzed=1,
         distribution=dist,
         recordings=[rec],
+        failed_recordings=[],
         clinical_warnings=["Single recording analyzed."],
     )
     assert resp.is_pd is False
@@ -86,4 +87,3 @@ def test_predict_rejects_empty_file(client):
     res = client.post("/api/v1/predict", files=files)
     assert res.status_code == 400
     assert "0 bytes" in res.json()["detail"]
-

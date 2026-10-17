@@ -11,6 +11,7 @@ import torch
 from backend.config import DEVICE, MODEL_PATH
 from backend.schemas import (
     MetaStatsResponse,
+    FailedRecording,
     PredictionResponse,
     RecordingResult,
     StatisticalDistribution,
@@ -117,8 +118,8 @@ class PredictorService:
             )
 
             score = raw_result["meta_classifier_score"]
-            screening_cutoff = raw_result.get("screening_cutoff", 0.250)
-            diagnostic_cutoff = raw_result.get("diagnostic_cutoff", 0.450)
+            screening_cutoff = raw_result.get("screening_cutoff", 0.260)
+            diagnostic_cutoff = raw_result.get("diagnostic_cutoff", 0.460)
             balanced_cutoff = raw_result.get("meta_threshold", 0.360)
 
             triage_level = raw_result.get("triage_level", "LOW_RISK")
@@ -126,6 +127,13 @@ class PredictorService:
             is_pd = raw_result.get("is_parkinsons", False)
             confidence_level = raw_result.get("confidence_level", "Normal Voice Dynamics")
             triage_recommendation = raw_result.get("triage_recommendation", "")
+            failed_recordings = [
+                FailedRecording(
+                    filename=original_filenames.get(item["file"], Path(item["file"]).name),
+                    error=item["error"],
+                )
+                for item in raw_result.get("failed_recordings", [])
+            ]
 
             return PredictionResponse(
                 diagnosis=diagnosis,
@@ -141,6 +149,7 @@ class PredictorService:
                 recordings_analyzed=raw_result["recordings_analyzed"],
                 distribution=distribution,
                 recordings=recordings,
+                failed_recordings=failed_recordings,
                 clinical_warnings=raw_result["clinical_warnings"],
             )
 
@@ -160,9 +169,9 @@ class PredictorService:
         screening_cutoff = max(0.15, threshold - 0.10)
         diagnostic_cutoff = min(0.85, threshold + 0.10)
         return MetaStatsResponse(
-            threshold=threshold,
-            screening_cutoff=screening_cutoff,
-            diagnostic_cutoff=diagnostic_cutoff,
+            threshold=round(threshold, 3),
+            screening_cutoff=round(screening_cutoff, 3),
+            diagnostic_cutoff=round(diagnostic_cutoff, 3),
             aggregation="arithmetic_mean",
             score_field="participant_mean_score",
             model_version="Wav2Vec2_v2 (mPower)",

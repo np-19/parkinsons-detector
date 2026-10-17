@@ -19,14 +19,14 @@ $\tau + 0.10 = 0.460$.
 | Tier | Evaluation Level | Aggregation Method | Balanced Accuracy | Raw Accuracy | ROC-AUC | Sensitivity | Specificity |
 | :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 | **0** | **Recording-Level (Test)** | Single-crop Wav2Vec 2.0 | 71.22% | 71.22% | 0.7853 | 72.01% | 70.43% |
-| **1** | **Participant-Level (Test)** | Count-Invariant Mean ($\tau = 0.360$) | **74.72%** | **73.06%** | **0.8245** | **78.08%** | **71.36%** |
+| **1** | **Participant-Level (Test)** | Participant Mean ($\tau = 0.360$) | **74.72%** | **73.06%** | **0.8245** | **78.08%** | **71.36%** |
 | **2** | **Participant-Level (Val)** | Validation-Calibrated Mean ($\tau = 0.360$) | **80.09%** | **79.79%** | **0.8665** | **80.69%** | **79.49%** |
 | **Ext** | **Cross-Cohort (Zero-Shot)** | Raw sustained `/a/` phonation | **75.00%** | **75.00%** | — | **86.36%** | **63.64%** |
-| *Clin* | *Clinical Top-2 (Test)* | *Medication-Aware Top-2 Takes* | *81.83%* | *79.27%* | *0.8985* | *86.99%* | *76.67%* |
+| *Clin* | *Exploratory Top-2 (Test)* | *Top-2 probability aggregation* | *81.83%* | *79.27%* | *0.8985* | *86.99%* | *76.67%* |
 | *Abl* | *Exploratory Ablation* | *Multi-Moment Distribution Meta-Classifier* | *90.86%* | *95.16%* | *0.9346* | *82.19%* | *99.54%* |
 
 > [!NOTE]
-> **Adherence Confounding Analysis & Count-Invariant Aggregation**
+> **Adherence Confounding Analysis & Mean Aggregation**
 > In mPower app data, Parkinson's participants submitted significantly more recordings than controls due to medication-tracking protocols (5.04 vs 1.72 mean takes; 100% of participants with $\ge 3$ takes in the dataset are PD). Exploratory multi-moment models using order statistics (`max`, `min`, `top-2`, `count`) can artificially reach >90% by exploiting app usage frequency (AUC 0.897 on count alone). To ensure real-world clinical validity and prevent false alarms on patients who provide multiple takes, NeuroVocal enforces **count-invariant probability averaging** anchored at the validation-calibrated threshold ($\tau = 0.360$).
 
 ---
@@ -58,7 +58,7 @@ $\tau + 0.10 = 0.460$.
                            │
                            ▼ Recording Probabilities P(PD)
 ┌──────────────────────────────────────────────────────────┐
-│  Stage 2: Count-Invariant Acoustic Aggregator            │
+│  Stage 2: Arithmetic-Mean Acoustic Aggregator            │
 │  - Input: Phonation probabilities across patient takes   │
 │  - Aggregation: Arithmetic Mean P_mean = (1/N) sum(P_i)  │
 │  - Validation-Calibrated Decision Threshold: 0.360       │
