@@ -345,7 +345,7 @@ def run_cross_validation(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train and evaluate Gated Attention-MIL")
-    parser.add_argument("--bags", type=str, default="artifacts/mil/bags_test.pt")
+    parser.add_argument("--bags", type=str, default="artifacts/mil/bags_train.pt")
     parser.add_argument("--output-dir", type=str, default="artifacts/mil")
     parser.add_argument("--epochs", type=int, default=25)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -356,10 +356,18 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
+    bags_path = Path(args.bags)
+    if "test" in bags_path.name.lower():
+        raise ValueError(
+            f"Safety guard: refusing to run cross-validation on held-out test split ({bags_path}). "
+            "Cross-validation must strictly use training bags (artifacts/mil/bags_train.pt). "
+            "For production training and one-shot test evaluation, use scripts/train_mil_clean.py and src/deep_learning/evaluate.py."
+        )
+
     set_seed(42)
     dev = torch.device(args.device)
     run_cross_validation(
-        bags_path=Path(args.bags),
+        bags_path=bags_path,
         output_dir=Path(args.output_dir),
         device=dev,
         epochs=args.epochs,

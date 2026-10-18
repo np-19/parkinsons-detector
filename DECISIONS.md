@@ -161,13 +161,13 @@
 - **Decision**: Implement a lightweight 2-layer Gated Attention Multiple Instance Learning head (Ilse et al., ICML 2018) operating on multi-crop embeddings extracted from the frozen WaveLM backbone:
   $$a_i = \frac{\mathbf{w}^T (\tanh(\mathbf{V} \mathbf{h}_i) \odot \sigma(\mathbf{U} \mathbf{h}_i))}{\sqrt{L}}, \quad \alpha_i = \text{softmax}(a_i), \quad \mathbf{h}_{\text{bag}} = \sum_{i=1}^N \alpha_i \mathbf{h}_i$$
 - **Findings**:
-  - Elevated held-out test balanced accuracy to **81.86% [95% CI: 78.1%, 85.4%]** (+2.76% gain over 79.11% arithmetic mean).
-  - Increased PD Sensitivity to **81.51%** (catching 119/146 PD cases, rescuing 4 missed patients).
-  - Increased Healthy Specificity to **82.22%** (clearing 12 false alarms, from 89 down to 77).
-  - Achieved **0.8728 ROC-AUC [95% CI: 0.845, 0.909]**.
-  - Trained strictly on training participants (`bags_train.pt`) with zero test leakage, threshold calibrated exclusively on validation bags ($\tau = 0.300$).
+  - Elevated held-out test balanced accuracy to **82.43% [95% CI: 78.8%, 86.0%]** (+3.32% gain over 79.11% arithmetic mean).
+  - Increased PD Sensitivity to **83.56%** (catching 122/146 PD cases, rescuing 7 missed patients).
+  - Increased Healthy Specificity to **81.29%** (clearing 8 false alarms, from 89 down to 81).
+  - Achieved **0.8790 ROC-AUC [95% CI: 0.845, 0.912]**.
+  - Trained strictly on training participants (`bags_train.pt`) with zero test leakage, operating threshold calibrated exclusively on validation bags ($\tau = 0.300$, acoustic recording threshold $\tau_{\text{rec}} = 0.310$).
   - Preserves 100% count-invariance ($\sum \alpha_i = 1.0$), ensuring no gaming of variable take counts.
-- **Consequences**: Deployed in production via `mil_head.pt` with a calibrated threshold of $\tau = 0.300$ and per-recording attention attribution.
+- **Consequences**: Deployed in production via `mil_head.pt` using unified bag scoring (50:50 blend with attention-weighted recording probabilities and clinical consensus guardrail) across all bag sizes ($n \ge 1$) with separated thresholds ($\tau_{\text{part}} = 0.300$, $\tau_{\text{rec}} = 0.310$).
 
 ---
 

@@ -30,14 +30,17 @@ def dot(w: List[float], x: List[float]) -> float:
     return sum(wi * xi for wi, xi in zip(w, x))
 
 
-# Default model and calibrated threshold (WaveLM champion model + Attention-MIL)
+# Default model and calibrated thresholds (separately calibrated on held-out validation cohort)
 DEFAULT_WAVELM_PATH = "artifacts/models/deep_learning/wavelm/best_model.pt"
 DEFAULT_WAV2VEC2_PATH = "artifacts/models/deep_learning/wav2vec2/best_model.pt"
 DEFAULT_MIL_PATH = "artifacts/models/deep_learning/wavelm/mil_head.pt"
 
-WAVELM_OPTIMAL_THRESHOLD = 0.310
-MIL_OPTIMAL_THRESHOLD = 0.300
-ACOUSTIC_OPTIMAL_THRESHOLD = MIL_OPTIMAL_THRESHOLD
+# Threshold separation (Issue 4):
+# - WAVELM_RECORDING_THRESHOLD: calibrated on validation recordings for per-recording acoustic labels
+# - MIL_PARTICIPANT_THRESHOLD: calibrated on validation participant bags for Attention-MIL screening
+WAVELM_RECORDING_THRESHOLD = 0.310
+MIL_PARTICIPANT_THRESHOLD = 0.300
+ACOUSTIC_OPTIMAL_THRESHOLD = WAVELM_RECORDING_THRESHOLD
 SCREENING_CUTOFF = 0.200
 DIAGNOSTIC_CUTOFF = 0.500
 
@@ -46,7 +49,7 @@ META_WEIGHTS = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 META_MEANS = [0.385, 0.512, 0.281, 0.472, 0.438, 0.089, 0.362, 0.485, 0.448, 1.250]
 META_STDS = [0.245, 0.289, 0.215, 0.278, 0.261, 0.078, 0.231, 0.274, 0.263, 0.612]
 META_BIAS = 0.0
-META_THRESHOLD = ACOUSTIC_OPTIMAL_THRESHOLD
+META_THRESHOLD = MIL_PARTICIPANT_THRESHOLD
 
 
 class PatientPredictor:
@@ -58,6 +61,7 @@ class PatientPredictor:
         mil_model_path: Optional[Union[str, Path]] = DEFAULT_MIL_PATH,
         use_attention_mil: bool = True,
         threshold: Optional[float] = None,
+        recording_threshold: Optional[float] = None,
         device: Optional[str] = None,
         duration: float = 8.0,
         sample_rate: int = 16000,
@@ -102,8 +106,15 @@ class PatientPredictor:
         self.duration = float(cfg.get("duration", duration))
         self.sample_rate = int(cfg.get("sample_rate", sample_rate) or sample_rate)
         self.target_length = int(self.duration * self.sample_rate)
-        self.optimal_threshold = threshold if threshold is not None else float(ckpt.get("optimal_threshold", WAVELM_OPTIMAL_THRESHOLD))
-        print(f"    - Backbone Operating Threshold: {self.optimal_threshold:.3f}")
+
+        # Calibrate recording-level threshold (WaveLM acoustic backbone)
+        self.recording_threshold = (
+            recording_threshold
+            if recording_threshold is not None
+            else float(ckpt.get("optimal_threshold", WAVELM_RECORDING_THRESHOLD))
+        )
+        self.optimal_threshold = threshold if threshold is not None else float(ckpt.get("optimal_threshold", WAVELM_RECORDING_THRESHOLD))
+        print(f"    - Recording Acoustic Threshold: {self.recording_threshold:.3f}")
 
         # Initialize Gated Attention-MIL aggregation head
         if self.use_attention_mil and self.mil_model_path and self.mil_model_path.exists():
@@ -121,9 +132,10 @@ class PatientPredictor:
                 self.mil_model.load_state_dict(mil_ckpt["model_state_dict"])
                 self.mil_model.to(self.device).eval()
                 if threshold is None:
-                    self.optimal_threshold = float(mil_ckpt.get("optimal_threshold", MIL_OPTIMAL_THRESHOLD))
+                    self.optimal_threshold = float(mil_ckpt.get("optimal_threshold", MIL_PARTICIPANT_THRESHOLD))
                 print(f">>> [ATTENTION-MIL] Gated Attention Aggregation Loaded: {self.mil_model_path}")
                 print(f"    - Calibrated Operating Threshold: {self.optimal_threshold:.3f}")
+                print(f"    - Calibrated Recording Threshold: {self.recording_threshold:.3f}")
             except Exception as e:
                 print(f"    [Warning] Failed to load Attention-MIL head ({e}); falling back to arithmetic mean.")
                 self.mil_model = None
@@ -242,7 +254,7 @@ class PatientPredictor:
                     "probability_PD": round(prob, 4),
                     "recording_status": (
                         "Dysarthric / Tremor"
-                        if prob >= self.optimal_threshold
+                        if prob >= self.recording_threshold
                         else "Normal Phonation"
                     ),
                     "attention_weight": round(1.0 / len(audio_paths), 4),
@@ -271,20 +283,17 @@ class PatientPredictor:
         std_p = math.sqrt(var_p)
 
         # Gated Attention-MIL participant aggregation
+        # Unified scoring rule across all bag sizes (Issue 1):
+        # Even for single recording sessions (n == 1), run the MIL head over the available
+        # multi-crop embeddings, compute instance attention, 50:50 blend, and guardrail.
         aggregation_method = "arithmetic_mean"
         crop_weights_list = None
-        if n == 1:
-            # Single recording session: participant score is directly the recording's calibrated score
-            participant_score = recording_results[0]["probability_PD"]
-            recording_results[0]["attention_weight"] = 1.0
-            if self.use_attention_mil and self.mil_model is not None:
-                aggregation_method = "gated_attention_mil"
-        elif self.use_attention_mil and self.mil_model is not None and all_embs:
+        if self.use_attention_mil and self.mil_model is not None and all_embs:
             bag_tensor = torch.cat(all_embs, dim=0).to(self.device)
             with torch.no_grad():
                 mil_out = self.mil_model(bag_tensor)
                 mil_prob = float(mil_out["probability"].item())
-                crop_weights = mil_out["attention_weights"].cpu().numpy()
+                crop_weights = mil_out["attention_weights"].detach().cpu().numpy()
                 crop_weights_list = [round(float(w), 4) for w in crop_weights]
 
             aggregation_method = "gated_attention_mil"
@@ -310,9 +319,9 @@ class PatientPredictor:
             participant_score = 0.5 * weighted_p + 0.5 * mil_prob
 
             # Clinical Consensus Guardrail:
-            # If ALL recordings are unanimously below the operating threshold (Normal Phonation),
+            # If ALL recordings are unanimously below the recording threshold (Normal Phonation),
             # the participant cannot be declared Positive.
-            if all(r["probability_PD"] < self.optimal_threshold for r in recording_results):
+            if all(r["probability_PD"] < self.recording_threshold for r in recording_results):
                 participant_score = min(participant_score, max_p)
         else:
             participant_score = mean_p
@@ -378,6 +387,7 @@ class PatientPredictor:
             "participant_mean_score": round(participant_score, 4),
             "meta_classifier_score": round(participant_score, 4),
             "meta_threshold": balanced_threshold,
+            "recording_threshold": round(self.recording_threshold, 3),
             "screening_cutoff": screening_cutoff,
             "diagnostic_cutoff": diagnostic_cutoff,
             "confidence_level": confidence,

@@ -24,6 +24,7 @@ from backend.schemas import (
 )
 from src.deep_learning.predict_patient import (
     ACOUSTIC_OPTIMAL_THRESHOLD,
+    MIL_PARTICIPANT_THRESHOLD,
     META_BIAS,
     META_MEANS,
     META_STDS,
@@ -179,7 +180,7 @@ class PredictorService:
         threshold = (
             predictor.optimal_threshold
             if predictor is not None
-            else ACOUSTIC_OPTIMAL_THRESHOLD
+            else MIL_PARTICIPANT_THRESHOLD
         )
         screening_cutoff = max(0.15, threshold - 0.10)
         diagnostic_cutoff = min(0.85, threshold + 0.10)

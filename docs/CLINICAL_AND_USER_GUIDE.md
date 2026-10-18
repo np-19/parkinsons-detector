@@ -14,7 +14,7 @@ The system was evaluated on the held-out test split of the **mPower Mobile Parki
 | :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | **0** | **Wav2Vec 2.0 Base** | Arithmetic Mean ($\tau = 0.360$) | **74.72%** | 73.06% | 0.8245 | 78.08% | 71.36% | Baseline speech representation model. |
 | **1** | **WaveLM Base+** | Arithmetic Mean ($\tau = 0.310$) | **79.11%** | 79.27% | **0.8585** | 78.77% | 79.45% | Masked speech denoising foundation backbone. |
-| **2** | **WaveLM Base+** | **Attention-MIL ($\tau = 0.300$)** | **`81.86%`** | **`82.04%`** | **`0.8728`** | **`81.51%`** | **`82.22%`** | **Production Pipeline**: Gated attention bag pooling with zero test leakage. |
+| **2** | **WaveLM Base+** | **Attention-MIL ($\tau = 0.300$)** | **`82.43%`** | **`81.87%`** | **`0.8790`** | **`83.56%`** | **`81.29%`** | **Production Pipeline**: Gated attention bag pooling with zero test leakage. |
 
 ---
 

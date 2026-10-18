@@ -13,13 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Slices participant takes into multi-crop 8.0-second sliding windows, dynamically downweighting uninformative transient noise and silent air while concentrating attention on sustained phonation plateaus.
   - Exported trained weights to `artifacts/mil/mil_head.pt` and `artifacts/models/deep_learning/wavelm/mil_head.pt`.
 - **Grounded Benchmark Metrics (Held-Out Test Set, 579 Participants)**:
-  - **Balanced Accuracy**: Elevated from 79.11% (arithmetic mean) to **`81.86%` [95% CI: 78.1%, 85.4%]** (+2.76% gain, $\tau = 0.300$).
-  - **PD Sensitivity**: Increased from 78.77% to **`81.51%`** (catching 119 of 146 clinical PD patients, rescuing 4 previously missed cases).
-  - **Healthy Control Specificity**: Increased from 79.45% to **`82.22%`** (clearing 12 false alarms, reducing FP from 89 down to 77).
-  - **Held-Out Test ROC-AUC**: **`0.8728` [95% CI: 0.845, 0.909]**.
-  - **Clean Training Protocol**: Trained strictly on 2,705 training participant bags (`bags_train.pt`) with zero test leakage; decision threshold calibrated exclusively on validation bags ($\tau = 0.300$).
+  - **Balanced Accuracy**: Elevated from 79.11% (arithmetic mean) to **`82.43%` [95% CI: 78.8%, 86.0%]** (+3.32% gain, $\tau = 0.300$, $\tau_{\text{rec}} = 0.310$).
+  - **PD Sensitivity**: Increased from 78.77% to **`83.56%`** (catching 122 of 146 clinical PD patients, rescuing 7 previously missed cases).
+  - **Healthy Control Specificity**: Increased from 79.45% to **`81.29%`** (clearing 8 false alarms, reducing FP from 89 down to 81).
+  - **Held-Out Test ROC-AUC**: **`0.8790` [95% CI: 0.845, 0.912]**.
+  - **Clean Training Protocol**: Trained strictly on 2,705 training participant bags (`bags_train.pt`) with zero test leakage; participant threshold calibrated exclusively on validation bags ($\tau = 0.300$) and recording threshold calibrated on validation takes ($\tau_{\text{rec}} = 0.310$).
 - **High-Resolution Evaluation Figures (`docs/figures/`)**:
-  - `roc_curves.png`: High-resolution ROC curves for Baseline (AUC = 0.8585) vs. Attention-MIL (AUC = 0.8728).
+  - `roc_curves.png`: High-resolution ROC curves for Baseline (AUC = 0.8585) vs. Attention-MIL (AUC = 0.8790).
   - `confusion_matrices.png`: Side-by-side confusion matrices for Baseline vs. Attention-MIL (N=579) with clear actual condition and model prediction labels.
   - `clinical_triage_distribution.png`: Score density distribution across decision regions.
 - **Acoustic Signal Integrity (ADR-013)**:

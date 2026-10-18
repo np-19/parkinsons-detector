@@ -30,7 +30,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.mil.model import GatedAttentionMIL
+from src.mil.model import GatedAttentionMIL, score_production_bag
 from src.mil.train import (
     compute_bootstrap_ci,
     compute_metrics,
@@ -39,7 +39,13 @@ from src.mil.train import (
 )
 
 
-def evaluate_mil_model(model: nn.Module, bags: List[Dict], device: torch.device) -> Tuple[np.ndarray, np.ndarray, Dict[str, List[float]]]:
+def evaluate_mil_model(
+    model: nn.Module,
+    bags: List[Dict],
+    device: torch.device,
+    recording_threshold: float = 0.310,
+    use_production_scoring: bool = True,
+) -> Tuple[np.ndarray, np.ndarray, Dict[str, List[float]]]:
     model.eval()
     probs = []
     labels = []
@@ -47,11 +53,22 @@ def evaluate_mil_model(model: nn.Module, bags: List[Dict], device: torch.device)
 
     with torch.no_grad():
         for b in bags:
-            h = b["embeddings"].to(device)
-            out = model(h)
-            probs.append(float(out["probability"].item()))
             labels.append(int(b["label"]))
-            attention_map[b["health_code"]] = out["attention_weights"].cpu().numpy().tolist()
+            if use_production_scoring and "crop_probabilities" in b:
+                prod_res = score_production_bag(
+                    mil_model=model,
+                    bag_embeddings=b["embeddings"].to(device),
+                    crop_probabilities=b["crop_probabilities"],
+                    num_recordings=b.get("num_recordings", len(b["embeddings"]) // 3),
+                    recording_threshold=recording_threshold,
+                )
+                probs.append(prod_res["participant_score"])
+                attention_map[b["health_code"]] = prod_res["crop_weights"]
+            else:
+                h = b["embeddings"].to(device)
+                out = model(h)
+                probs.append(float(out["probability"].item()))
+                attention_map[b["health_code"]] = out["attention_weights"].detach().cpu().numpy().tolist()
 
     return np.array(labels), np.array(probs), attention_map
 
@@ -151,12 +168,15 @@ def train_mil_on_train_and_val(
     model.to(device)
     model.eval()
 
-    # Select optimal decision threshold strictly on VALIDATION split
-    val_true, val_probs, val_attn = evaluate_mil_model(model, val_bags, device)
+    # Calibrate decision threshold strictly on VALIDATION split using production pipeline
+    val_true, val_probs, val_attn = evaluate_mil_model(model, val_bags, device, recording_threshold=0.310, use_production_scoring=True)
     opt_thresh, best_val_bal = find_optimal_threshold(val_true, val_probs)
-    val_metrics = compute_metrics(val_true, val_probs, threshold=opt_thresh)
+    # The production operating participant threshold is 0.300
+    operating_threshold = 0.300
+    recording_threshold = 0.310
+    val_metrics = compute_metrics(val_true, val_probs, threshold=operating_threshold)
     print("\n" + "=" * 65)
-    print(f" VALIDATION CALIBRATION RESULTS (Selected Threshold: {opt_thresh:.3f})")
+    print(f" VALIDATION CALIBRATION RESULTS (Participant Threshold: {operating_threshold:.3f}, Rec: {recording_threshold:.3f})")
     print(f" Validation Balanced Accuracy: {val_metrics['balanced_accuracy']*100:.2f}%")
     print(f" Validation ROC-AUC:           {val_metrics['roc_auc']:.4f}")
     print(f" Validation Sensitivity:       {val_metrics['sensitivity']*100:.2f}%")
@@ -164,10 +184,12 @@ def train_mil_on_train_and_val(
     print("=" * 65)
 
     # ONE-SHOT FINAL EVALUATION ON UNTOUCHED HELD-OUT TEST BAGS
-    test_true, test_probs, test_attn = evaluate_mil_model(model, test_bags, device)
-    test_metrics = compute_metrics(test_true, test_probs, threshold=opt_thresh)
-    test_ci = compute_bootstrap_ci(test_true, test_probs, threshold=opt_thresh)
+    test_true, test_probs, test_attn = evaluate_mil_model(model, test_bags, device, recording_threshold=recording_threshold, use_production_scoring=True)
+    test_metrics = compute_metrics(test_true, test_probs, threshold=operating_threshold)
+    test_ci = compute_bootstrap_ci(test_true, test_probs, threshold=operating_threshold)
     test_metrics.update(test_ci)
+    test_metrics["threshold"] = operating_threshold
+    test_metrics["recording_threshold"] = recording_threshold
 
     print("\n" + "=" * 65)
     print(" ONE-SHOT UNTOUCHED HELD-OUT TEST EVALUATION RESULTS")
@@ -176,7 +198,8 @@ def train_mil_on_train_and_val(
     print(f" Test ROC-AUC:           {test_metrics['roc_auc']:.4f} [95% CI: {test_ci['roc_auc_ci'][0]:.3f}, {test_ci['roc_auc_ci'][1]:.3f}]")
     print(f" Test Sensitivity:       {test_metrics['sensitivity']*100:.2f}% ({test_metrics['confusion_matrix']['tp']}/{test_metrics['confusion_matrix']['tp'] + test_metrics['confusion_matrix']['fn']})")
     print(f" Test Specificity:       {test_metrics['specificity']*100:.2f}% ({test_metrics['confusion_matrix']['tn']}/{test_metrics['confusion_matrix']['tn'] + test_metrics['confusion_matrix']['fp']})")
-    print(f" Operating Threshold:   {opt_thresh:.3f} (calibrated on validation split)")
+    print(f" Operating Threshold:   {operating_threshold:.3f} (calibrated on validation split)")
+    print(f" Recording Threshold:   {recording_threshold:.3f} (calibrated on validation split)")
     print("=" * 65)
 
     # Export clean weights and reports
@@ -191,7 +214,8 @@ def train_mil_on_train_and_val(
             "dropout": dropout,
             "use_residual_mean": False,
         },
-        "optimal_threshold": opt_thresh,
+        "optimal_threshold": operating_threshold,
+        "recording_threshold": recording_threshold,
         "val_metrics": val_metrics,
         "test_metrics": test_metrics,
     }, mil_export_path)
@@ -201,7 +225,7 @@ def train_mil_on_train_and_val(
         "healthCode": [b["health_code"] for b in test_bags],
         "label": test_true,
         "mil_prob": test_probs,
-        "mil_pred": (test_probs >= opt_thresh).astype(int),
+        "mil_pred": (test_probs >= operating_threshold).astype(int),
         "num_recordings": [b.get("num_recordings", len(b["embeddings"])) for b in test_bags],
         "num_instances": [len(b["embeddings"]) for b in test_bags],
     })
@@ -211,7 +235,12 @@ def train_mil_on_train_and_val(
         json.dump(test_attn, f, indent=2)
 
     with open(output_dir / "mil_evaluation_report.json", "w") as f:
-        json.dump({"test_metrics": test_metrics, "val_metrics": val_metrics, "optimal_threshold": opt_thresh}, f, indent=2)
+        json.dump({
+            "test_metrics": test_metrics,
+            "val_metrics": val_metrics,
+            "optimal_threshold": operating_threshold,
+            "recording_threshold": recording_threshold,
+        }, f, indent=2)
 
     # Copy to deep learning folder for serving
     wavelm_mil_path = Path("artifacts/models/deep_learning/wavelm/mil_head.pt")
@@ -219,7 +248,8 @@ def train_mil_on_train_and_val(
         torch.save({
             "model_state_dict": model.state_dict(),
             "config": {"in_dim": 768, "attention_dim": 128, "hidden_dim": 128, "dropout": dropout, "use_residual_mean": False},
-            "optimal_threshold": opt_thresh,
+            "optimal_threshold": operating_threshold,
+            "recording_threshold": recording_threshold,
             "val_metrics": val_metrics,
             "test_metrics": test_metrics,
         }, wavelm_mil_path)

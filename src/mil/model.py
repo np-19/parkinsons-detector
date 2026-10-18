@@ -127,3 +127,72 @@ class GatedAttentionMIL(nn.Module):
             "bag_embedding": pooled_emb,
         }
 
+
+def score_production_bag(
+    mil_model: nn.Module,
+    bag_embeddings: torch.Tensor,
+    crop_probabilities: torch.Tensor,
+    num_recordings: int,
+    recording_threshold: float = 0.310,
+    crops_per_rec: int = 3,
+) -> Dict:
+    """Score a participant bag using the complete deployed production scoring pipeline.
+
+    Unified for all bag sizes (single recording n=1 or multiple recordings n>1):
+    1. MIL forward pass on all crop embeddings -> mil_prob and crop attention weights.
+    2. Sum crop attention weights per recording and normalize across recordings.
+    3. Compute per-recording probability as the mean of its crop probabilities.
+    4. Compute attention-weighted recording probability: sum(w_i * p_i).
+    5. 50:50 blend: participant_score = 0.5 * weighted_p + 0.5 * mil_prob.
+    6. Clinical Consensus Guardrail: If all recordings are below recording_threshold,
+       cap participant_score at max(p_i).
+    """
+    import numpy as np
+
+    with torch.no_grad():
+        mil_out = mil_model(bag_embeddings)
+        mil_prob = float(mil_out["probability"].item())
+        crop_weights = mil_out["attention_weights"].detach().cpu().numpy()
+
+        if isinstance(crop_probabilities, torch.Tensor):
+            crop_p = crop_probabilities.detach().cpu().numpy()
+        else:
+            crop_p = np.array(crop_probabilities, dtype=float)
+
+        n_rec = max(num_recordings, 1)
+        actual_crops_per_rec = len(crop_p) // n_rec if n_rec > 0 else crops_per_rec
+
+        rec_probs = []
+        rec_weights = []
+        for r in range(n_rec):
+            start = r * actual_crops_per_rec
+            end = start + actual_crops_per_rec
+            rec_probs.append(float(np.mean(crop_p[start:end])))
+            rec_weights.append(float(np.sum(crop_weights[start:end])))
+
+        total_w = sum(rec_weights)
+        if total_w > 1e-6:
+            rec_weights = [w / total_w for w in rec_weights]
+        else:
+            rec_weights = [1.0 / n_rec] * n_rec
+
+        weighted_p = sum(w * p for w, p in zip(rec_weights, rec_probs))
+        blend_p = 0.5 * weighted_p + 0.5 * mil_prob
+
+        # Clinical consensus guardrail
+        max_rec_p = max(rec_probs) if rec_probs else blend_p
+        if all(p < recording_threshold for p in rec_probs):
+            final_p = min(blend_p, max_rec_p)
+        else:
+            final_p = blend_p
+
+        return {
+            "participant_score": float(final_p),
+            "mil_prob": float(mil_prob),
+            "weighted_p": float(weighted_p),
+            "blend_p": float(blend_p),
+            "rec_probs": rec_probs,
+            "rec_weights": rec_weights,
+            "crop_weights": [round(float(w), 4) for w in crop_weights],
+        }
+

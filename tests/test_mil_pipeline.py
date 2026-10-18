@@ -129,3 +129,89 @@ def test_exported_production_mil_head():
     assert out["attention_weights"].shape == (6,)
     assert torch.isclose(out["attention_weights"].sum(), torch.tensor(1.0), atol=1e-5)
 
+
+def test_single_recording_inference_uses_mil():
+    """Verify single-recording bag runs MIL head on the 3 crop representations and blends (Issue 1)."""
+    from pathlib import Path
+    from src.mil.model import score_production_bag
+
+    mil_path = Path("artifacts/models/deep_learning/wavelm/mil_head.pt")
+    ckpt = torch.load(mil_path, map_location="cpu", weights_only=False)
+    valid_keys = {"in_dim", "attention_dim", "hidden_dim", "dropout", "use_residual_mean"}
+    clean_cfg = {k: v for k, v in ckpt.get("config", {}).items() if k in valid_keys}
+    model = GatedAttentionMIL(**clean_cfg)
+    model.load_state_dict(ckpt["model_state_dict"])
+    model.eval()
+
+    # 1 recording with 3 crops
+    embs = torch.randn(3, 768)
+    crop_probs = torch.tensor([0.20, 0.25, 0.24])  # mean = 0.23
+
+    res = score_production_bag(
+        mil_model=model,
+        bag_embeddings=embs,
+        crop_probabilities=crop_probs,
+        num_recordings=1,
+        recording_threshold=0.310,
+        crops_per_rec=3,
+    )
+
+    # Must have 3 crop weights summing to 1.0
+    assert len(res["crop_weights"]) == 3
+    assert abs(sum(res["crop_weights"]) - 1.0) < 1e-4
+
+    # Recording weight must be 1.0
+    assert len(res["rec_weights"]) == 1
+    assert abs(res["rec_weights"][0] - 1.0) < 1e-4
+
+    # Recording prob equals mean of crops
+    assert abs(res["rec_probs"][0] - 0.23) < 1e-4
+
+    # Participant score is blended
+    expected_blend = 0.5 * 0.23 + 0.5 * res["mil_prob"]
+    # Since rec_prob (0.23) < recording_threshold (0.310), guardrail applies: min(blend, 0.23)
+    expected_final = min(expected_blend, 0.23)
+    assert abs(res["participant_score"] - expected_final) < 1e-4
+
+
+def test_scoring_rule_consistency_across_bag_sizes():
+    """Verify identical scoring rule applies to 1-recording and multi-recording bags (Issue 1 & 2)."""
+    from pathlib import Path
+    from src.mil.model import score_production_bag
+
+    mil_path = Path("artifacts/models/deep_learning/wavelm/mil_head.pt")
+    ckpt = torch.load(mil_path, map_location="cpu", weights_only=False)
+    clean_cfg = {k: v for k, v in ckpt.get("config", {}).items() if k in {"in_dim", "attention_dim", "hidden_dim", "dropout", "use_residual_mean"}}
+    model = GatedAttentionMIL(**clean_cfg)
+    model.load_state_dict(ckpt["model_state_dict"])
+    model.eval()
+
+    for n_rec in [1, 2, 4]:
+        embs = torch.randn(n_rec * 3, 768)
+        crop_probs = torch.full((n_rec * 3,), 0.45)
+        res = score_production_bag(
+            mil_model=model,
+            bag_embeddings=embs,
+            crop_probabilities=crop_probs,
+            num_recordings=n_rec,
+            recording_threshold=0.310,
+        )
+        assert "participant_score" in res
+        assert "mil_prob" in res
+        assert "weighted_p" in res
+        assert len(res["rec_weights"]) == n_rec
+        assert abs(sum(res["rec_weights"]) - 1.0) < 1e-4
+
+
+def test_threshold_separation_and_documentation():
+    """Verify recording-level (0.310) and participant-level (0.300) thresholds are separated (Issue 4)."""
+    from src.deep_learning.predict_patient import (
+        ACOUSTIC_OPTIMAL_THRESHOLD,
+        MIL_PARTICIPANT_THRESHOLD,
+        WAVELM_RECORDING_THRESHOLD,
+    )
+
+    assert WAVELM_RECORDING_THRESHOLD == 0.310
+    assert MIL_PARTICIPANT_THRESHOLD == 0.300
+    assert ACOUSTIC_OPTIMAL_THRESHOLD == 0.310
+

@@ -175,6 +175,9 @@ def main() -> None:
         bags = torch.load(bags_path, map_location=device, weights_only=False)
         print(f"Loaded {len(bags)} held-out test participant bags.")
 
+        from src.mil.model import score_production_bag
+        from src.mil.train import compute_bootstrap_ci
+
         p_true = []
         p_prob_base = []
         p_prob_mil = []
@@ -187,14 +190,14 @@ def main() -> None:
                 base_p = float(b["crop_probabilities"].mean().item())
                 p_prob_base.append(base_p)
                 if mil_model is not None:
-                    out = mil_model(b["embeddings"].to(device))
-                    mil_p = float(out["probability"].item())
-                    # Clinical consensus guardrail
-                    if b.get("num_recordings", 1) == 1:
-                        mil_p = base_p
-                    elif (b["crop_probabilities"] < optimal_threshold).all():
-                        mil_p = min(mil_p, float(b["crop_probabilities"].max().item()))
-                    p_prob_mil.append(mil_p)
+                    prod_res = score_production_bag(
+                        mil_model=mil_model,
+                        bag_embeddings=b["embeddings"].to(device),
+                        crop_probabilities=b["crop_probabilities"],
+                        num_recordings=b.get("num_recordings", len(b["embeddings"]) // 3),
+                        recording_threshold=optimal_threshold,
+                    )
+                    p_prob_mil.append(prod_res["participant_score"])
 
         p_true = np.array(p_true, dtype=int)
         p_prob_base = np.array(p_prob_base, dtype=float)
@@ -205,11 +208,13 @@ def main() -> None:
         if mil_model is not None:
             p_prob_mil = np.array(p_prob_mil, dtype=float)
             part_metrics_mil = compute_metrics(p_true, p_prob_mil, threshold=mil_threshold)
+            ci = compute_bootstrap_ci(p_true, p_prob_mil, threshold=mil_threshold)
+            part_metrics_mil.update(ci)
 
         print("\n" + "=" * 65)
         print("           HELD-OUT TEST SPLIT EVALUATION RESULTS")
         print("=" * 65)
-        print(f"Optimal Threshold (selected on val): {optimal_threshold:.3f}\n")
+        print(f"Recording Threshold (selected on val): {optimal_threshold:.3f}\n")
         print("--- 1. Primary Baseline: Participant Mean (Arithmetic Mean) ---")
         print(f"  Participants Evaluated:   {len(p_true)}")
         print(f"  Balanced Accuracy:        {part_metrics_opt['balanced_accuracy'] * 100:.2f}%")
@@ -225,12 +230,19 @@ def main() -> None:
             delta_bal = (part_metrics_mil['balanced_accuracy'] - part_metrics_opt['balanced_accuracy']) * 100
             print(f"\n--- 2. Production: Gated Attention-MIL Aggregation ---")
             print(f"  Operating Threshold:      {mil_threshold:.3f}")
+            print(f"  Recording Threshold:      {optimal_threshold:.3f}")
             print(f"  Balanced Accuracy:        {part_metrics_mil['balanced_accuracy'] * 100:.2f}% (Delta: {delta_bal:+.2f}%)")
+            if "balanced_accuracy_ci" in part_metrics_mil:
+                b_ci = part_metrics_mil["balanced_accuracy_ci"]
+                print(f"  95% Bootstrap CI:         [{b_ci[0]*100:.1f}%, {b_ci[1]*100:.1f}%]")
             print(f"  Accuracy:                 {part_metrics_mil['accuracy'] * 100:.2f}%")
             print(f"  Sensitivity (PD Recall):  {part_metrics_mil['sensitivity'] * 100:.2f}% ({part_metrics_mil['confusion_matrix']['tp']}/{part_metrics_mil['confusion_matrix']['tp'] + part_metrics_mil['confusion_matrix']['fn']})")
             print(f"  Specificity (Ctrl Rec):   {part_metrics_mil['specificity'] * 100:.2f}% ({part_metrics_mil['confusion_matrix']['tn']}/{part_metrics_mil['confusion_matrix']['tn'] + part_metrics_mil['confusion_matrix']['fp']})")
             print(f"  F1 Score:                 {part_metrics_mil['f1']:.4f}")
             print(f"  ROC-AUC:                  {part_metrics_mil['roc_auc']:.4f}")
+            if "roc_auc_ci" in part_metrics_mil:
+                a_ci = part_metrics_mil["roc_auc_ci"]
+                print(f"  ROC-AUC 95% CI:           [{a_ci[0]:.3f}, {a_ci[1]:.3f}]")
             print(f"  Confusion Matrix:         TN={part_metrics_mil['confusion_matrix']['tn']}, FP={part_metrics_mil['confusion_matrix']['fp']}, "
                   f"FN={part_metrics_mil['confusion_matrix']['fn']}, TP={part_metrics_mil['confusion_matrix']['tp']}")
 
@@ -241,6 +253,7 @@ def main() -> None:
             "model_dir": str(model_dir),
             "best_epoch": best_epoch,
             "optimal_threshold": optimal_threshold,
+            "recording_threshold": optimal_threshold,
             "participant_level": {
                 "optimal_threshold_metrics": part_metrics_opt,
                 "default_threshold_metrics": part_metrics_default,
@@ -250,6 +263,7 @@ def main() -> None:
         if part_metrics_mil is not None:
             report["gated_attention_mil"] = {
                 "threshold": mil_threshold,
+                "recording_threshold": optimal_threshold,
                 "metrics": part_metrics_mil,
             }
 

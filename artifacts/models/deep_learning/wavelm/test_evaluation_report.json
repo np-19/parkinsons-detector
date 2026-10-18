@@ -2,6 +2,7 @@
   "model_dir": "artifacts/models/deep_learning/wavelm",
   "best_epoch": 14,
   "optimal_threshold": 0.31,
+  "recording_threshold": 0.31,
   "participant_level": {
     "optimal_threshold_metrics": {
       "accuracy": 0.7927461139896373,
@@ -35,19 +36,36 @@
   },
   "gated_attention_mil": {
     "threshold": 0.30000000000000004,
+    "recording_threshold": 0.31,
     "metrics": {
-      "accuracy": 0.8203799654576857,
-      "balanced_accuracy": 0.8186196969217627,
-      "sensitivity": 0.815068493150685,
-      "specificity": 0.8221709006928406,
-      "f1": 0.695906432748538,
-      "roc_auc": 0.8727893954253535,
+      "accuracy": 0.8186528497409327,
+      "balanced_accuracy": 0.8242747318801606,
+      "sensitivity": 0.8356164383561644,
+      "specificity": 0.812933025404157,
+      "f1": 0.6991404011461319,
+      "roc_auc": 0.8790376158688981,
       "confusion_matrix": {
-        "tn": 356,
-        "fp": 77,
-        "fn": 27,
-        "tp": 119
-      }
+        "tn": 352,
+        "fp": 81,
+        "fn": 24,
+        "tp": 122
+      },
+      "balanced_accuracy_ci": [
+        0.7884900612167559,
+        0.8595068995720923
+      ],
+      "roc_auc_ci": [
+        0.8452065230121109,
+        0.9115781010257268
+      ],
+      "sensitivity_ci": [
+        0.7708192567567568,
+        0.8954272753877671
+      ],
+      "specificity_ci": [
+        0.7704507224214301,
+        0.8486403142970019
+      ]
     }
   }
 }
