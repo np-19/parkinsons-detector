@@ -11,7 +11,7 @@ if ! docker info >/dev/null 2>&1; then
     fi
 fi
 
-MODEL_DIR="${1:-artifacts/models/deep_learning/wav2vec2_v2}"
+MODEL_DIR="${1:-artifacts/models/deep_learning/wavelm}"
 NUM_CROPS="${2:-5}"
 DURATION="${3:-8.0}"
 

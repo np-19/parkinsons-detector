@@ -1,5 +1,5 @@
 {
-  "model_dir": "artifacts/models/deep_learning/wavelm_v4",
+  "model_dir": "artifacts/models/deep_learning/wavelm",
   "best_epoch": 14,
   "optimal_threshold": 0.31,
   "participant_level": {
@@ -34,19 +34,19 @@
     "total_participants": 579
   },
   "gated_attention_mil": {
-    "threshold": 0.39,
+    "threshold": 0.30000000000000004,
     "metrics": {
-      "accuracy": 0.8238341968911918,
-      "balanced_accuracy": 0.8254690119902559,
-      "sensitivity": 0.8287671232876712,
+      "accuracy": 0.8203799654576857,
+      "balanced_accuracy": 0.8186196969217627,
+      "sensitivity": 0.815068493150685,
       "specificity": 0.8221709006928406,
-      "f1": 0.7034883720930233,
-      "roc_auc": 0.8715239330570408,
+      "f1": 0.695906432748538,
+      "roc_auc": 0.8727893954253535,
       "confusion_matrix": {
         "tn": 356,
         "fp": 77,
-        "fn": 25,
-        "tp": 121
+        "fn": 27,
+        "tp": 119
       }
     }
   }

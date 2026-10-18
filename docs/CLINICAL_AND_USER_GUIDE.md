@@ -10,12 +10,11 @@ NeuroVocal detects early acoustic signs of Parkinson's Disease from short audio 
 
 The system was evaluated on the held-out test split of the **mPower Mobile Parkinson Study** (579 participants, 1,480 audio recordings) under strict participant-level separation (zero data leakage between train and test sets):
 
-| Tier | Evaluation Level | Aggregation Method | Balanced Accuracy | Raw Accuracy | ROC-AUC | Sensitivity | Specificity | Description |
+| Tier | Architecture | Aggregation Method | Balanced Accuracy | Raw Accuracy | ROC-AUC | Sensitivity | Specificity | Description |
 | :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **0** | **Recording-Level** | Single-crop WaveLM v4 | **74.57%** | 74.59% | 0.8183 | 69.29% | 79.84% | Baseline frame-level acoustic representation. |
-| **1** | **Participant-Level** | Arithmetic Mean ($\tau = 0.290$) | **80.02%** | 79.62% | **0.8585** | 80.82% | 79.21% | Standard count-invariant probability averaging. |
-| **2** | **Production Pipeline** | **WaveLM v4 + Attention-MIL ($\tau = 0.390$)** | **`82.77%`** | **`82.04%`** | **`0.8558`** | **`84.25%`** | **`81.29%`** | **Production Engine**: Learns attention weights across crops, downweighting breath loss. |
-| **3** | **Decisive Triage Cohort** | **3-Tier Confidence Protocol ($[0.20, 0.50]$)** | **`83.55%`** | **`83.16%`** | **`0.8558`** | **`84.38%`** | **`82.73%`** | Highly accurate decisions across **84.1% of participants** (487/579). |
+| **0** | **Wav2Vec 2.0 Base** | Arithmetic Mean ($\tau = 0.360$) | **74.72%** | 73.06% | 0.8245 | 78.08% | 71.36% | Baseline speech representation model. |
+| **1** | **WaveLM Base+** | Arithmetic Mean ($\tau = 0.310$) | **79.11%** | 79.27% | **0.8585** | 78.77% | 79.45% | Masked speech denoising foundation backbone. |
+| **2** | **WaveLM Base+** | **Attention-MIL ($\tau = 0.300$)** | **`81.86%`** | **`82.04%`** | **`0.8728`** | **`81.51%`** | **`82.22%`** | **Production Pipeline**: Gated attention bag pooling with zero test leakage. |
 
 ---
 
@@ -74,7 +73,7 @@ Providing **2 to 3 takes** recorded a few moments apart helps the Attention-MIL 
 Run inference on one or more WAV recordings using [`src/deep_learning/predict_patient.py`](../src/deep_learning/predict_patient.py):
 
 ```bash
-# Evaluate a participant with multiple recordings using WaveLM v4 + Attention-MIL
+# Evaluate a participant with multiple recordings using WaveLM + Attention-MIL
 python3 src/deep_learning/predict_patient.py \
   data/processed_audio/test/PD/100009.wav \
   data/processed_audio/test/PD/100136.wav
@@ -82,18 +81,18 @@ python3 src/deep_learning/predict_patient.py \
 
 **Terminal Output:**
 ```text
->>> Loading single speech model from: artifacts/models/deep_learning/wavelm_v4/best_model.pt (on cuda)...
->>> [ATTENTION-MIL] Gated Attention Aggregation Loaded: artifacts/models/deep_learning/wavelm_v4/mil_head.pt
-    - Calibrated Operating Threshold: 0.390
+>>> Loading single speech model from: artifacts/models/deep_learning/wavelm/best_model.pt (on cuda)...
+>>> [ATTENTION-MIL] Gated Attention Aggregation Loaded: artifacts/models/deep_learning/wavelm/mil_head.pt
+    - Calibrated Operating Threshold: 0.300
 
 =================================================================
       PARKINSON'S ACOUSTIC SCREENING REPORT
 =================================================================
   Final Diagnosis:      POSITIVE (Acoustic Dysphonia Detected)
-  Clinical Triage:      HIGH_RISK (Screening: <0.290 | Diagnostic: ≥0.490)
+  Clinical Triage:      HIGH_RISK (Screening: <0.200 | Diagnostic: ≥0.500)
   Confidence Level:     High Confidence Positive
   Aggregation Method:   gated_attention_mil
-  Participant Score:    0.9229 (Decision Threshold: 0.390)
+  Participant Score:    0.9229 (Decision Threshold: 0.300)
   Recordings Analyzed:  2
   Recordings Failed:    0
 -----------------------------------------------------------------
@@ -124,8 +123,8 @@ from src.deep_learning.predict_patient import PatientPredictor
 
 # Initialize the production pipeline
 predictor = PatientPredictor(
-    model_path="artifacts/models/deep_learning/wavelm_v4/best_model.pt",
-    mil_model_path="artifacts/models/deep_learning/wavelm_v4/mil_head.pt",
+    model_path="artifacts/models/deep_learning/wavelm/best_model.pt",
+    mil_model_path="artifacts/models/deep_learning/wavelm/mil_head.pt",
     use_attention_mil=True,
     device="cuda",  # or "cpu"
 )
@@ -188,11 +187,11 @@ Accepts one or more WAV audio files via multipart form data (`files`).
 Returns system decision metadata and operating thresholds:
 ```json
 {
-  "threshold": 0.39,
-  "screening_cutoff": 0.29,
-  "diagnostic_cutoff": 0.49,
+  "threshold": 0.30,
+  "screening_cutoff": 0.20,
+  "diagnostic_cutoff": 0.50,
   "aggregation": "gated_attention_mil",
   "score_field": "participant_mean_score",
-  "model_version": "WaveLM v4 + Gated Attention-MIL"
+  "model_version": "WaveLM + Gated Attention-MIL (mPower)"
 }
 ```

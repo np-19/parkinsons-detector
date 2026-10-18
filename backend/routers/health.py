@@ -13,10 +13,16 @@ router = APIRouter(tags=["System & Health"])
 def get_health() -> HealthResponse:
     """Return backend health, PyTorch version, and GPU/CPU device status."""
     service = PredictorService.get_instance()
+    is_mil = bool(service.predictor and getattr(service.predictor, "mil_model", None) is not None)
+    model_ver = (
+        "WaveLM + Gated Attention-MIL (mPower)"
+        if is_mil
+        else "WaveLM (mPower)"
+    )
     return HealthResponse(
         status="healthy",
         model_loaded=service.is_loaded(),
-        model_version="Wav2Vec2_v2 (mPower)",
+        model_version=model_ver,
         device=service.get_device_name(),
         torch_version=torch.__version__,
         supported_formats=sorted(list(ALLOWED_EXTENSIONS)),

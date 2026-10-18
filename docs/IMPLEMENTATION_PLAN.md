@@ -1,10 +1,10 @@
-# Deep Learning Fine-Tuning & Docker Portability Implementation Plan (>85% Target)
+# Deep Learning Fine-Tuning & Docker Portability Implementation Plan
 
-This document contains the complete technical blueprint, mathematical justification, and execution plan for fine-tuning `facebook/wav2vec2-base` on the mPower dataset inside a portable Docker container for local GTX 1650 and GridShare cloud GPU environments.
+This document contains the complete technical blueprint, mathematical justification, and execution plan for fine-tuning pretrained speech representations on the mPower dataset inside a portable Docker container for local GTX 1650 and GridShare cloud GPU environments.
 
 ---
 
-## 1. Scientific & Mathematical Foundation for >85% Accuracy
+## 1. Scientific & Mathematical Foundation for High Generalization
 
 ### 1.1 The Generalizability Gap in Prior Baselines
 Previous experiments achieved high validation accuracy that failed to transfer to unseen test participants:
@@ -20,7 +20,7 @@ The ~10% drop on held-out test participants was caused by:
 2. **Naïve Mean Pooling**: Collapsing time frames ($\sim 500$ frames for a 5-second audio snippet) into a uniform average dilutes localized phonation instabilities.
 3. **Acoustic Background Confounding**: Fixed tabular acoustic features overfit to specific room reverberation and smartphone microphone responses present in the training participants.
 
-### 1.2 Five Key Architectural Mechanisms to Exceed 85% Test Accuracy
+### 1.2 Five Key Architectural Mechanisms for Robust Acoustic Generalization
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -191,7 +191,7 @@ parkinsons-detector/
      - Sensitivity (PD recall) & Specificity (Control recall)
      - Participant F1 score & ROC-AUC
      - Confusion Matrix
-   - Writes structured JSON and CSV reports into `artifacts/models/deep_learning/wav2vec2_finetuned/`.
+   - Writes structured JSON and CSV reports into `artifacts/models/deep_learning/wavelm/`.
 
 ---
 

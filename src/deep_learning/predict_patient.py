@@ -30,16 +30,16 @@ def dot(w: List[float], x: List[float]) -> float:
     return sum(wi * xi for wi, xi in zip(w, x))
 
 
-# Default model and calibrated threshold (WaveLM v4 best model + Attention-MIL)
-DEFAULT_WAVELM_PATH = "artifacts/models/deep_learning/wavelm_v4/best_model.pt"
-DEFAULT_WAV2VEC2_PATH = "artifacts/models/deep_learning/wav2vec2_v2/best_model.pt"
-DEFAULT_MIL_PATH = "artifacts/models/deep_learning/wavelm_v4/mil_head.pt"
+# Default model and calibrated threshold (WaveLM champion model + Attention-MIL)
+DEFAULT_WAVELM_PATH = "artifacts/models/deep_learning/wavelm/best_model.pt"
+DEFAULT_WAV2VEC2_PATH = "artifacts/models/deep_learning/wav2vec2/best_model.pt"
+DEFAULT_MIL_PATH = "artifacts/models/deep_learning/wavelm/mil_head.pt"
 
 WAVELM_OPTIMAL_THRESHOLD = 0.310
-MIL_OPTIMAL_THRESHOLD = 0.390
+MIL_OPTIMAL_THRESHOLD = 0.300
 ACOUSTIC_OPTIMAL_THRESHOLD = MIL_OPTIMAL_THRESHOLD
-SCREENING_CUTOFF = 0.290
-DIAGNOSTIC_CUTOFF = 0.490
+SCREENING_CUTOFF = 0.200
+DIAGNOSTIC_CUTOFF = 0.500
 
 # Backward-compatibility reference exports for API endpoints
 META_WEIGHTS = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -50,16 +50,13 @@ META_THRESHOLD = ACOUSTIC_OPTIMAL_THRESHOLD
 
 
 class PatientPredictor:
-    """End-to-end patient inference pipeline powered by WaveLM v4 + Gated Attention-MIL."""
+    """End-to-end patient inference pipeline powered by WaveLM + Gated Attention-MIL."""
 
     def __init__(
         self,
         model_path: Union[str, Path] = DEFAULT_WAVELM_PATH,
         mil_model_path: Optional[Union[str, Path]] = DEFAULT_MIL_PATH,
         use_attention_mil: bool = True,
-        secondary_model_path: Optional[Union[str, Path]] = None,
-        use_ensemble: bool = False,
-        ensemble_weights: tuple = (0.75, 0.25),
         threshold: Optional[float] = None,
         device: Optional[str] = None,
         duration: float = 8.0,
@@ -70,7 +67,6 @@ class PatientPredictor:
         self.duration = duration
         self.sample_rate = sample_rate
         self.num_crops = num_crops
-        self.ensemble_weights = ensemble_weights
         self.use_attention_mil = use_attention_mil
         self.mil_model_path = Path(mil_model_path) if mil_model_path else None
         self.mil_model = None
@@ -98,33 +94,16 @@ class PatientPredictor:
             model.eval()
             return model, cfg, checkpoint
 
-        path1 = Path(model_path) if model_path else None
-        path2 = Path(secondary_model_path) if secondary_model_path else None
-        self.is_ensemble = bool(use_ensemble and path1 and path1.exists() and path2 and path2.exists())
-
-        if self.is_ensemble:
-            print(f">>> [ENSEMBLE] Multi-Backbone Ensemble Initializing on {self.device}")
-            print(f"    - Primary Backbone   (Weight {self.ensemble_weights[0]:.2f}): {path1}")
-            self.model, cfg1, ckpt1 = _load_model_and_config(path1)
-            print(f"    - Secondary Backbone (Weight {self.ensemble_weights[1]:.2f}): {path2}")
-            self.secondary_model, cfg2, ckpt2 = _load_model_and_config(path2)
-            self.duration = float(cfg1.get("duration", duration))
-            self.sample_rate = int(cfg1.get("sample_rate", sample_rate) or sample_rate)
-            self.target_length = int(self.duration * self.sample_rate)
-            self.optimal_threshold = threshold if threshold is not None else 0.298
-            print(f"    - Operating Threshold: {self.optimal_threshold:.3f}")
-        else:
-            active_path = path1 if (path1 and path1.exists()) else path2
-            if not active_path or not active_path.exists():
-                raise FileNotFoundError(f"Model checkpoint not found: {model_path}")
-            print(f">>> Loading single speech model from: {active_path} (on {self.device})...")
-            self.model, cfg, ckpt = _load_model_and_config(active_path)
-            self.secondary_model = None
-            self.duration = float(cfg.get("duration", duration))
-            self.sample_rate = int(cfg.get("sample_rate", sample_rate) or sample_rate)
-            self.target_length = int(self.duration * self.sample_rate)
-            self.optimal_threshold = threshold if threshold is not None else float(ckpt.get("optimal_threshold", WAVELM_OPTIMAL_THRESHOLD))
-            print(f"    - Backbone Operating Threshold: {self.optimal_threshold:.3f}")
+        active_path = Path(model_path) if model_path else Path(DEFAULT_WAVELM_PATH)
+        if not active_path.exists():
+            raise FileNotFoundError(f"Model checkpoint not found: {model_path}")
+        print(f">>> Loading single speech model from: {active_path} (on {self.device})...")
+        self.model, cfg, ckpt = _load_model_and_config(active_path)
+        self.duration = float(cfg.get("duration", duration))
+        self.sample_rate = int(cfg.get("sample_rate", sample_rate) or sample_rate)
+        self.target_length = int(self.duration * self.sample_rate)
+        self.optimal_threshold = threshold if threshold is not None else float(ckpt.get("optimal_threshold", WAVELM_OPTIMAL_THRESHOLD))
+        print(f"    - Backbone Operating Threshold: {self.optimal_threshold:.3f}")
 
         # Initialize Gated Attention-MIL aggregation head
         if self.use_attention_mil and self.mil_model_path and self.mil_model_path.exists():
@@ -236,25 +215,9 @@ class PatientPredictor:
 
         batch = torch.stack(crops, dim=0).to(self.device)
         with torch.no_grad():
-            outputs1 = self.model(input_values=batch)
-            p1 = float(outputs1["probabilities"][:, 1].mean().item())
-            embs = outputs1["embeddings"].cpu()
-
-            if self.is_ensemble and self.secondary_model is not None:
-                outputs2 = self.secondary_model(input_values=batch)
-                p2 = float(outputs2["probabilities"][:, 1].mean().item())
-
-                # Option B: Bayesian Log-Odds consensus (75% WaveLM v4 + 25% Wav2Vec2 v2)
-                eps = 1e-6
-                p1_c = max(min(p1, 1.0 - eps), eps)
-                p2_c = max(min(p2, 1.0 - eps), eps)
-                z1 = math.log(p1_c / (1.0 - p1_c))
-                z2 = math.log(p2_c / (1.0 - p2_c))
-                w1, w2 = self.ensemble_weights
-                z_ens = w1 * z1 + w2 * z2
-                rec_prob = sigmoid(z_ens)
-            else:
-                rec_prob = p1
+            outputs = self.model(input_values=batch)
+            rec_prob = float(outputs["probabilities"][:, 1].mean().item())
+            embs = outputs["embeddings"].cpu()
 
         if return_embeddings:
             return rec_prob, embs
@@ -440,17 +403,12 @@ def main():
     parser.add_argument(
         "--model-path",
         default=DEFAULT_WAVELM_PATH,
-        help="Primary model checkpoint (default: WaveLM v4 best model)",
+        help="Model checkpoint path (default: WaveLM champion model)",
     )
     parser.add_argument(
-        "--secondary-model-path",
-        default=DEFAULT_WAV2VEC2_PATH,
-        help="Secondary model checkpoint for optional ensemble",
-    )
-    parser.add_argument(
-        "--ensemble",
-        action="store_true",
-        help="Enable multi-backbone ensemble (WaveLM v4 + Wav2Vec2 v2)",
+        "--mil-path",
+        default=DEFAULT_MIL_PATH,
+        help="Gated Attention-MIL head path (default: WaveLM mil_head.pt)",
     )
     parser.add_argument(
         "--threshold",
@@ -464,8 +422,7 @@ def main():
 
     predictor = PatientPredictor(
         model_path=args.model_path,
-        secondary_model_path=args.secondary_model_path if args.ensemble else None,
-        use_ensemble=args.ensemble,
+        mil_model_path=args.mil_path,
         threshold=args.threshold,
         device=args.device,
     )

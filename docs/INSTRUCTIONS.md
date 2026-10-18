@@ -1,6 +1,6 @@
-# User Instructions & Project Directives
+# Project Architecture Directives & Constraints
 
-This document records the exact instructions and mandatory operational constraints provided by the user for the `parkinsons-detector` project.
+This document records the architectural constraints, hardware budgets, and evaluation guidelines for the voice-based Parkinson's detection project.
 
 ---
 
@@ -15,9 +15,9 @@ This document records the exact instructions and mandatory operational constrain
    - The user requires the ability to run locally when desired, but also deploy seamlessly to **cloud GPUs from GridShare** (or RunPod/Lambda) without altering application code or encountering environment mismatches.
    - All deep learning training and evaluation must be encapsulated in Docker containers with volume mounts for `data/`, `artifacts/`, and Hugging Face model cache (`.cache/huggingface`).
 
-3. **Exceed the 85% Accuracy Barrier on Held-Out Test Data**
+3. **Overcome Baseline Generalization Ceiling on Held-Out Test Data**
    - Previous baseline classifiers (linear models, SVMs, and gradient-boosted trees on openSMILE acoustic features) hit a ceiling of **72.0% participant-level accuracy on the held-out test split**, despite achieving 81.2% on validation.
-   - The architecture must scientifically address why static representations failed (phoneme bias, naïve mean pooling, acoustic background overfitting) and implement end-to-end representation learning, learnable temporal attention pooling, SpecAugment, and participant-level aggregation to cross **>85% participant accuracy**.
+   - The architecture scientifically addresses why static representations failed (phoneme bias, naïve mean pooling, acoustic background overfitting) and implements end-to-end representation learning, learnable temporal attention pooling, SpecAugment, and count-invariant Gated Attention-MIL to maximize genuine acoustic discrimination.
 
 4. **Document Before Starting**
    - Full documentation, architectural specifications, decisions (`DECISIONS.md`), changelog (`CHANGELOG.md`), and step-by-step implementation plans must be committed before implementing codebase files.

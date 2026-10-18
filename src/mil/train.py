@@ -139,7 +139,7 @@ def run_cross_validation(
     n_ctrl = int(np.sum(labels == 0))
     print(f"Class distribution: {n_pd} PD ({n_pd/len(labels)*100:.1f}%), {n_ctrl} Control ({n_ctrl/len(labels)*100:.1f}%)")
 
-    # Baseline: Count-Invariant Arithmetic Mean of WaveLM v4 probabilities
+    # Baseline: Count-Invariant Arithmetic Mean of WaveLM probabilities
     baseline_probs = []
     for p in participant_list:
         # p["crop_probabilities"]: (N_crops,)
@@ -153,7 +153,7 @@ def run_cross_validation(
     base_metrics.update(base_ci)
 
     print("\n-------------------------------------------------------")
-    print(f"BASELINE: Count-Invariant Arithmetic Mean (WaveLM v4)")
+    print(f"BASELINE: Count-Invariant Arithmetic Mean (WaveLM)")
     print(f"Balanced Accuracy: {base_metrics['balanced_accuracy']*100:.2f}% [95% CI: {base_ci['balanced_accuracy_ci'][0]*100:.1f}%, {base_ci['balanced_accuracy_ci'][1]*100:.1f}%]")
     print(f"ROC-AUC:           {base_metrics['roc_auc']:.4f} [95% CI: {base_ci['roc_auc_ci'][0]:.3f}, {base_ci['roc_auc_ci'][1]:.3f}]")
     print(f"Sensitivity:       {base_metrics['sensitivity']*100:.2f}%")
@@ -334,7 +334,7 @@ def run_cross_validation(
         "metrics": mil_metrics,
     }
     torch.save(mil_export, output_dir / "mil_head.pt")
-    target_dl_dir = Path("artifacts/models/deep_learning/wavelm_v4")
+    target_dl_dir = Path("artifacts/models/deep_learning/wavelm")
     target_dl_dir.mkdir(parents=True, exist_ok=True)
     torch.save(mil_export, target_dl_dir / "mil_head.pt")
     print(f"Exported production mil_head.pt to {output_dir / 'mil_head.pt'} and {target_dl_dir / 'mil_head.pt'}")

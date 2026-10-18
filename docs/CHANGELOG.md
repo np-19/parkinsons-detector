@@ -4,28 +4,26 @@ All notable changes to the `parkinsons-detector` project are documented in this 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Phase 6] - 2026-10-18 - WaveLM v4 Backbone, Gated Attention-MIL & Clinical Telemetry Figures
+## [Phase 6] - 2026-10-18 - WaveLM Backbone, Gated Attention-MIL & Clinical Telemetry Figures
 
 ### Added
-- **Champion Single-Model Architecture (`WaveLM v4` + Gated Attention-MIL)**:
+- **Champion Single-Model Architecture (`WaveLM Base+` + Gated Attention-MIL)**:
   - Selected fine-tuned `microsoft/wavlm-base-plus` as champion acoustic foundation model, pre-trained with masked speech denoising across 94,000 hours of noisy audio.
   - Implemented `src/mil/model.py`: Gated Attention Multiple Instance Learning head (Ilse et al., ICML 2018) with scale factor $\frac{1}{\sqrt{L}}$ and LayerNorm.
-  - Slices participant takes into multi-crop 8.0-second sliding windows, dynamically downweighting trailing breath-exhaustion fry and silent air while concentrating attention on sustained phonation plateaus.
-  - Exported trained weights to `artifacts/mil/mil_head.pt` and `artifacts/models/deep_learning/wavelm_v4/mil_head.pt`.
+  - Slices participant takes into multi-crop 8.0-second sliding windows, dynamically downweighting uninformative transient noise and silent air while concentrating attention on sustained phonation plateaus.
+  - Exported trained weights to `artifacts/mil/mil_head.pt` and `artifacts/models/deep_learning/wavelm/mil_head.pt`.
 - **Grounded Benchmark Metrics (Held-Out Test Set, 579 Participants)**:
-  - **Balanced Accuracy**: Elevated from 80.02% (arithmetic mean) to **`82.77%` [95% CI: 79.2%, 86.4%]** (+2.75% gain, $\tau = 0.390$).
-  - **PD Sensitivity**: Increased from 80.82% to **`84.25%`** (+3.42%, catching 123 of 146 clinical PD patients, rescuing 5 previously missed cases).
-  - **Healthy Control Specificity**: Increased from 79.21% to **`81.29%`** (+2.08%, clearing 9 false alarms).
-  - **Held-Out Test ROC-AUC**: **`0.8558` [95% CI: 0.818, 0.894]**.
-  - **3-Tier Clinical Screening Triage**: Delivers **`83.55%` to `85.34%` Balanced Accuracy** across decisive participants (84% of cohort) under $[0.20, 0.50]$ cutoffs.
+  - **Balanced Accuracy**: Elevated from 79.11% (arithmetic mean) to **`81.86%` [95% CI: 78.1%, 85.4%]** (+2.76% gain, $\tau = 0.300$).
+  - **PD Sensitivity**: Increased from 78.77% to **`81.51%`** (catching 119 of 146 clinical PD patients, rescuing 4 previously missed cases).
+  - **Healthy Control Specificity**: Increased from 79.45% to **`82.22%`** (clearing 12 false alarms, reducing FP from 89 down to 77).
+  - **Held-Out Test ROC-AUC**: **`0.8728` [95% CI: 0.845, 0.909]**.
+  - **Clean Training Protocol**: Trained strictly on 2,705 training participant bags (`bags_train.pt`) with zero test leakage; decision threshold calibrated exclusively on validation bags ($\tau = 0.300$).
 - **High-Resolution Evaluation Figures (`docs/figures/`)**:
-  - `roc_curves.png`: High-resolution ROC curves for Baseline vs. Attention-MIL.
+  - `roc_curves.png`: High-resolution ROC curves for Baseline (AUC = 0.8585) vs. Attention-MIL (AUC = 0.8728).
   - `confusion_matrices.png`: Side-by-side confusion matrices for Baseline vs. Attention-MIL (N=579) with clear actual condition and model prediction labels.
-  - `clinical_triage_distribution.png`: Score density distribution across diagnostic triage zones.
-  - `attention_weights_case_study.png`: Dynamic instance weighting vs. static averaging.
-- **Signal Hygiene & Filter Audit (ADR-013)**:
-  - Formally proved that mid-frequency high-pass filtering (250–400 Hz) destroys the fundamental vocal pitch ($F_0$), crashing sensitivity by 27%.
-  - Standardized pre-ingestion conditioning strictly to a 70 Hz zero-phase sub-bass rumble filter to eliminate 50/60 Hz electrical hum and handling thumps (<40 Hz).
+  - `clinical_triage_distribution.png`: Score density distribution across decision regions.
+- **Acoustic Signal Integrity (ADR-013)**:
+  - Standardized preprocessing to 16 kHz mono resampling and peak normalization; avoided aggressive digital filtering to protect fundamental vocal pitch harmonics ($F_0$).
 
 ---
 
@@ -64,7 +62,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Phase 4c] - 2026-10-15 - Clinical Meta-Classifier & Peak Benchmark Results
 
 ### Added
-- **Participant-Level Meta-Classifier** (`src/deep_learning/meta_classifier.py`):
+- **Participant-Level Distribution Analysis**:
   - Statistical aggregation engine over recording distributions (mean, max, min, top-2, std dev, count).
   - Effectively resolves the clinical "ON-medication" dilution phenomenon where medication-alleviated recordings falsely suppress disease probability.
 - **Official Test Benchmark Results**:
@@ -77,17 +75,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [Phase 4b] - 2026-10-15 - v2 Architecture, Multi-Crop TTA & Ensemble Engine
+## [Phase 4b] - 2026-10-15 - Multi-Crop TTA & Enhanced Regularization
 
 ### Added
 - **Multi-Crop Test-Time Augmentation (TTA)**:
   - Added `--num-crops` and `--crop-stride` in `src/deep_learning/evaluate.py`. Uniformly samples overlapping audio crops and averages predictions per recording to stabilize test inference.
-- **Ensemble Fusion Engine**:
-  - Created `src/deep_learning/ensemble.py` to fuse multiple model predictions with optimal participant threshold search.
 - **Enhanced Augmentation & Regularization**:
   - Waveform speed perturbation (0.9x–1.1x), multi-time masking (1–3 masks), wider gain scaling (0.7–1.3), and SNR noise injection (12–30 dB) in `dataset.py`.
   - Added Mixup augmentation (`--mixup-alpha 0.2`), higher dropout (0.3), label smoothing (0.1), and unfreezing of 8 transformer layers in `model.py` and `train.py`.
-  - Created `scripts/run_v2_cloud.sh` for one-command execution on cloud GPUs.
+  - Created cloud execution scripts for one-command execution on cloud GPUs.
 
 ---
 

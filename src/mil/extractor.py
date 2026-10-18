@@ -1,4 +1,4 @@
-"""High-Performance Batch Feature & Embedding Extractor using WaveLM v4 Backbone.
+"""High-Performance Batch Feature & Embedding Extractor using WaveLM Backbone.
 
 Runs batched multi-crop extraction on the local NVIDIA GeForce GTX 1650
 with PyTorch AMP FP16 and num_workers=0 (to avoid IPC stalls on Linux/Python 3.14).
@@ -124,7 +124,7 @@ def extract_participant_bags(
     duration: float = 8.0,
     sample_rate: int = 16000,
 ) -> Dict:
-    """Extract WaveLM v4 embeddings and group into participant bags."""
+    """Extract WaveLM embeddings and group into participant bags."""
     print(f"\n=======================================================")
     print(f" Extracting Participant Bags from {metadata_csv.name}")
     print(f" Target Device: {device} (Batch size: {batch_size} recs = {batch_size * num_crops} crops)")
@@ -133,7 +133,7 @@ def extract_participant_bags(
     df = pd.read_csv(metadata_csv)
     print(f"Loaded {len(df)} metadata rows across {df['healthCode'].nunique()} participants.")
 
-    # Load WaveLM v4 backbone
+    # Load WaveLM backbone
     print(f"Loading checkpoint: {model_path}")
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     cfg = checkpoint.get("config", {})
@@ -257,11 +257,13 @@ def extract_participant_bags(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Extract WaveLM v4 embeddings into participant bags")
+    parser = argparse.ArgumentParser(description="Extract WaveLM embeddings into participant bags")
+    parser.add_argument("--metadata", type=str, default=None, help="Path to metadata CSV (train.csv, validation.csv, test.csv)")
+    parser.add_argument("--output-path", type=str, default=None, help="Explicit destination file for participant bags (.pt)")
     parser.add_argument("--test-metadata", type=str, default="data/metadata/test.csv")
     parser.add_argument("--val-metadata", type=str, default="data/metadata/validation.csv")
     parser.add_argument("--audio-root", type=str, default="data/processed_audio")
-    parser.add_argument("--model-path", type=str, default="artifacts/models/deep_learning/wavelm_v4/best_model.pt")
+    parser.add_argument("--model-path", type=str, default="artifacts/models/deep_learning/wavelm/best_model.pt")
     parser.add_argument("--output-dir", type=str, default="artifacts/mil")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--num-crops", type=int, default=3)
@@ -271,11 +273,14 @@ if __name__ == "__main__":
     dev = torch.device(args.device)
     out_dir = Path(args.output_dir)
 
+    target_meta = Path(args.metadata) if args.metadata else Path(args.test_metadata)
+    target_out = Path(args.output_path) if args.output_path else (out_dir / "bags_test.pt")
+
     extract_participant_bags(
-        metadata_csv=Path(args.test_metadata),
+        metadata_csv=target_meta,
         audio_root=Path(args.audio_root),
         model_path=Path(args.model_path),
-        output_path=out_dir / "bags_test.pt",
+        output_path=target_out,
         device=dev,
         batch_size=args.batch_size,
         num_crops=args.num_crops,

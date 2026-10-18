@@ -117,7 +117,7 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
       {/* Calibrated 3-Zone Clinical Probability Scale */}
       {(() => {
         const screeningCutoff = report.screening_cutoff ?? report.threshold - 0.10;
-        const balancedCutoff = report.threshold ?? 0.36;
+        const balancedCutoff = report.threshold ?? 0.30;
         const diagnosticCutoff = report.diagnostic_cutoff ?? report.threshold + 0.10;
 
         const zone1Width = Math.round(screeningCutoff * 100);

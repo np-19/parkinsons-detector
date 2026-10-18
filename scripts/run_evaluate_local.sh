@@ -4,8 +4,8 @@
 # Uses the project virtual environment (data/.venv)
 #
 # Usage:
-#   ./scripts/run_evaluate_local.sh                                          # Defaults to WaveLM v4 best model
-#   ./scripts/run_evaluate_local.sh artifacts/models/deep_learning/wavelm_v4 # Explicit model directory
+#   ./scripts/run_evaluate_local.sh                                       # Defaults to WaveLM champion model
+#   ./scripts/run_evaluate_local.sh artifacts/models/deep_learning/wavelm # Explicit model directory
 #   ./scripts/run_evaluate_local.sh <model_dir> <num_crops> <duration>
 # ==============================================================================
 set -euo pipefail
@@ -24,9 +24,9 @@ fi
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
     echo "Usage: $0 [model_dir] [num_crops] [duration] [batch_size]"
-    echo "  $0                                          # Default: WaveLM v4 best model on local GPU"
-    echo "  $0 artifacts/models/deep_learning/wavelm_v4 # Explicit model directory"
-    echo "  $0 artifacts/models/deep_learning/wav2vec2_v2"
+    echo "  $0                                       # Default: WaveLM champion model on local GPU"
+    echo "  $0 artifacts/models/deep_learning/wavelm # Explicit model directory"
+    echo "  $0 artifacts/models/deep_learning/wav2vec2"
     exit 0
 fi
 
@@ -38,10 +38,10 @@ for arg in "$@"; do
     fi
 done
 
-MODEL_DIR="${1:-artifacts/models/deep_learning/wavelm_v4}"
+MODEL_DIR="${1:-artifacts/models/deep_learning/wavelm}"
 # If first arg was fast flag, reset MODEL_DIR to default
 if [ "${MODEL_DIR}" = "--fast" ] || [ "${MODEL_DIR}" = "fast" ]; then
-    MODEL_DIR="artifacts/models/deep_learning/wavelm_v4"
+    MODEL_DIR="artifacts/models/deep_learning/wavelm"
 fi
 NUM_CROPS="${2:-5}"
 DURATION="${3:-8.0}"

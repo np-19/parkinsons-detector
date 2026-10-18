@@ -10,13 +10,10 @@ import torch
 
 from backend.config import (
     DEVICE,
-    ENSEMBLE_THRESHOLD,
     MIL_PATH,
     MIL_THRESHOLD,
     MODEL_PATH,
-    SECONDARY_MODEL_PATH,
     USE_ATTENTION_MIL,
-    USE_ENSEMBLE,
 )
 from backend.schemas import (
     MetaStatsResponse,
@@ -45,9 +42,6 @@ class PredictorService:
     def __init__(self):
         self.predictor: Optional[PatientPredictor] = None
         self.model_path = MODEL_PATH
-        self.secondary_model_path = SECONDARY_MODEL_PATH
-        self.use_ensemble = USE_ENSEMBLE
-        self.threshold = ENSEMBLE_THRESHOLD
         self.device = DEVICE
 
     @classmethod
@@ -63,18 +57,14 @@ class PredictorService:
             return
 
         logger.info(
-            "Initializing PatientPredictor (WaveLM best model, MIL=%s, ensemble=%s, device=%s)...",
+            "Initializing PatientPredictor (WaveLM champion model, MIL=%s, device=%s)...",
             USE_ATTENTION_MIL,
-            self.use_ensemble,
             self.device,
         )
         self.predictor = PatientPredictor(
             model_path=self.model_path,
             mil_model_path=MIL_PATH,
             use_attention_mil=USE_ATTENTION_MIL,
-            secondary_model_path=self.secondary_model_path if self.use_ensemble else None,
-            use_ensemble=self.use_ensemble,
-            threshold=self.threshold if self.use_ensemble else None,
             device=self.device,
             duration=8.0,
             sample_rate=16000,
@@ -141,9 +131,9 @@ class PredictorService:
             )
 
             score = raw_result["meta_classifier_score"]
-            screening_cutoff = raw_result.get("screening_cutoff", 0.260)
-            diagnostic_cutoff = raw_result.get("diagnostic_cutoff", 0.460)
-            balanced_cutoff = raw_result.get("meta_threshold", 0.360)
+            screening_cutoff = raw_result.get("screening_cutoff", 0.200)
+            diagnostic_cutoff = raw_result.get("diagnostic_cutoff", 0.500)
+            balanced_cutoff = raw_result.get("meta_threshold", 0.300)
 
             triage_level = raw_result.get("triage_level", "LOW_RISK")
             diagnosis = raw_result.get("participant_verdict", "NEGATIVE (Normal Acoustic Biomarkers)")
@@ -194,11 +184,7 @@ class PredictorService:
         screening_cutoff = max(0.15, threshold - 0.10)
         diagnostic_cutoff = min(0.85, threshold + 0.10)
         is_mil = bool(predictor and getattr(predictor, "mil_model", None) is not None)
-        model_ver = (
-            "Option B Ensemble (WaveLM v4 [75%] + Wav2Vec2 v2 [25%])"
-            if (predictor and getattr(predictor, "is_ensemble", False))
-            else ("WaveLM v4 + Gated Attention-MIL (mPower)" if is_mil else "WaveLM v4 (mPower)")
-        )
+        model_ver = "WaveLM + Gated Attention-MIL (mPower)" if is_mil else "WaveLM (mPower)"
         agg_name = "gated_attention_mil" if is_mil else "arithmetic_mean"
         return MetaStatsResponse(
             threshold=round(threshold, 3),

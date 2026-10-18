@@ -64,7 +64,7 @@ def compute_metrics(y_true: np.ndarray, y_prob: np.ndarray, threshold: float = 0
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate fine-tuned model on held-out test split")
-    parser.add_argument("--model-dir", type=str, default="artifacts/models/deep_learning/wav2vec2_v2", help="Directory containing best_model.pt")
+    parser.add_argument("--model-dir", type=str, default="artifacts/models/deep_learning/wavelm", help="Directory containing best_model.pt")
     parser.add_argument("--test-metadata", type=str, default="data/metadata/test.csv", help="Path to test.csv")
     parser.add_argument("--audio-root", type=str, default="data/processed_audio", help="Audio root directory")
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size for inference")
@@ -126,7 +126,7 @@ def main() -> None:
     mil_path = Path(args.mil_path) if args.mil_path else (model_dir / "mil_head.pt")
     if not mil_path.exists():
         for candidate in [
-            Path("artifacts/models/deep_learning/wavelm_v4/mil_head.pt"),
+            Path("artifacts/models/deep_learning/wavelm/mil_head.pt"),
             Path("artifacts/mil/mil_head.pt"),
         ]:
             if candidate.exists():
@@ -134,15 +134,17 @@ def main() -> None:
                 break
 
     mil_model = None
-    mil_threshold = 0.390
+    mil_threshold = 0.300
     if mil_path and mil_path.exists():
         try:
             from src.mil.model import GatedAttentionMIL
             mil_ckpt = torch.load(mil_path, map_location=device, weights_only=False)
-            mil_model = GatedAttentionMIL(**mil_ckpt["config"])
+            valid_keys = {"in_dim", "attention_dim", "hidden_dim", "dropout", "use_residual_mean"}
+            clean_cfg = {k: v for k, v in mil_ckpt.get("config", {}).items() if k in valid_keys}
+            mil_model = GatedAttentionMIL(**clean_cfg)
             mil_model.load_state_dict(mil_ckpt["model_state_dict"])
             mil_model.to(device).eval()
-            mil_threshold = float(mil_ckpt.get("optimal_threshold", 0.390))
+            mil_threshold = float(mil_ckpt.get("optimal_threshold", 0.300))
             print(f">>> [ATTENTION-MIL] Gated Attention Head Loaded: {mil_path}")
             print(f"    - Calibrated Operating Threshold: {mil_threshold:.3f}")
         except Exception as e:

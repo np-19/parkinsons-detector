@@ -1,5 +1,5 @@
 {
-  "model_dir": "artifacts/models/deep_learning/wav2vec2_v2",
+  "model_dir": "artifacts/models/deep_learning/wav2vec2",
   "best_epoch": 13,
   "optimal_threshold": 0.36000000000000004,
   "participant_level": {

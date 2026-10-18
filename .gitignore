@@ -13,13 +13,15 @@ dist/
 *.zip
 *.gz
 
-# Raw and processed audio data (3.1 GB)
+# Raw and processed audio data (3.1 GB) & raw Synapse data tables
 data/processed_audio/
 data/train/
 data/validation/
 data/test/
 mPower_Audio/
 test_samples/
+data/Job-*.csv
+Job-*.csv
 
 # Python caches and local tooling
 __pycache__/
@@ -35,7 +37,7 @@ __pycache__/
 *.safetensors
 *.bin
 !artifacts/mil/mil_head.pt
-!artifacts/models/deep_learning/wavelm_v4/mil_head.pt
+!artifacts/models/deep_learning/wavelm/mil_head.pt
 
 # Local logs and temporary files
 *.log

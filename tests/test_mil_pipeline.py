@@ -104,3 +104,28 @@ def test_bootstrap_ci_coverage():
         low, high = ci[metric]
         assert 0.0 <= low <= high <= 1.0, f"Invalid CI interval for {metric}: [{low}, {high}]"
 
+
+def test_exported_production_mil_head():
+    """Verify exported production mil_head.pt loads and matches calibrated threshold."""
+    from pathlib import Path
+    mil_path = Path("artifacts/models/deep_learning/wavelm/mil_head.pt")
+    assert mil_path.exists(), f"Missing production MIL head at {mil_path}"
+
+    ckpt = torch.load(mil_path, map_location="cpu", weights_only=False)
+    assert "model_state_dict" in ckpt
+    assert "optimal_threshold" in ckpt
+    assert abs(ckpt["optimal_threshold"] - 0.300) < 1e-4
+
+    valid_keys = {"in_dim", "attention_dim", "hidden_dim", "dropout", "use_residual_mean"}
+    clean_cfg = {k: v for k, v in ckpt.get("config", {}).items() if k in valid_keys}
+    model = GatedAttentionMIL(**clean_cfg)
+    model.load_state_dict(ckpt["model_state_dict"])
+    model.eval()
+
+    dummy_h = torch.randn(6, 768)
+    with torch.no_grad():
+        out = model(dummy_h)
+    assert 0.0 <= out["probability"].item() <= 1.0
+    assert out["attention_weights"].shape == (6,)
+    assert torch.isclose(out["attention_weights"].sum(), torch.tensor(1.0), atol=1e-5)
+

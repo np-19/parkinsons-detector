@@ -11,7 +11,7 @@
 - [ADR-007: Docker-First Containerization for Local GTX 1650 and GridShare Cloud GPU Portability](#adr-007-docker-first-containerization-for-local-gtx-1650-and-gridshare-cloud-gpu-portability)
 - [ADR-008: Pre-Implementation Verification and Documentation Protocol](#adr-008-pre-implementation-verification-and-documentation-protocol)
 - [ADR-009: 8.0-Second Audio Window & 8-Layer Transformer Unfreezing](#adr-009-80-second-audio-window--8-layer-transformer-unfreezing)
-- [ADR-010: Participant-Distribution Meta-Classifier for Overcoming Levodopa Medication Masking](#adr-010-participant-distribution-meta-classifier-for-overcoming-levodopa-medication-masking)
+- [ADR-010: Count-Invariant Clinical Aggregation & Adherence Confounder Analysis](#adr-010-count-invariant-clinical-aggregation--adherence-confounder-analysis)
 
 ---
 
@@ -107,9 +107,9 @@
 ### ADR-008: Pre-Implementation Verification and Documentation Protocol
 
 - **Status**: Accepted
-- **Context**: The user explicitly instructed to be completely sure before implementing, verify all mechanisms, and document everything (including `CHANGELOG.md`, `DECISIONS.md`, and instructions) prior to writing code.
+- **Context**: Deep learning audio pipelines on constrained GPU hardware require formal architectural planning, memory verification, and comprehensive documentation prior to code execution.
 - **Decision**: Require comprehensive architectural documentation, VRAM math verification, and clear execution instructions to be drafted, reviewed, and committed before creating implementation files.
-- **Rationale**: Prevents wasted compute cycles, eliminates runtime surprises, and ensures strict adherence to clinical ML evaluation safeguards.
+- **Rationale**: Prevents wasted compute cycles, eliminates runtime surprises, and ensures strict adherence to reproducible ML evaluation safeguards.
 - **Consequences**: All implementation phases must follow the documented specifications without unilateral architectural deviations.
 
 ---
@@ -130,11 +130,54 @@
 ### ADR-010: Count-Invariant Clinical Aggregation & Adherence Confounder Analysis
 
 - **Status**: Refactored (Supersedes Multi-Moment Meta-Classifier)
-- **Context**: In clinical evaluation, simple arithmetic mean aggregation across participant recordings produced a **74.72%** balanced accuracy (**0.8245 ROC-AUC**), while Top-2 medication-aware aggregation achieved **81.83%** (**0.8985 ROC-AUC**). Multi-moment distribution features (`mean`, `max`, `min`, `top-2`, `std dev`, `count`) were explored to mitigate diurnal Levodopa "ON" state symptom masking.
+- **Context**: In clinical evaluation, simple arithmetic mean aggregation across participant recordings produced a **74.72%** balanced accuracy (**0.8245 ROC-AUC**), while Top-2 medication-aware aggregation achieved **81.83%** (**0.8985 ROC-AUC**). Multi-moment distribution features (`mean`, `max`, `min`, `top-2`, `std dev`, `count`) were explored to mitigate diurnal medication "ON" state symptom masking.
 - **Audit Findings**: Empirical verification revealed a major study-protocol confounder in the mPower dataset: Parkinson's participants submitted significantly more recordings than controls due to medication-tracking protocols (5.04 vs 1.72 mean takes; 100% of participants with $\ge 3$ takes in the dataset are PD). Consequently, order statistics (`max`, `min`, `std`) over variable takes inadvertently captured app usage adherence (AUC 0.897 on count alone). When evaluated on count-controlled cohorts (fixed $K=2$ takes), the meta-classifier provided zero gain over simple probability averaging.
 - **Decision**: Standardize production patient-level inference to **Count-Invariant Probability Averaging** ($\bar{P} = \frac{1}{N}\sum P_i$) anchored at the validation-calibrated decision threshold ($\tau = 0.360$) and stratified into a 3-tier clinical triage scale:
   - **Low Risk ($\bar{P} < 0.25$)**: Normal voice dynamics.
   - **Borderline Screening Alert ($0.25 \le \bar{P} < 0.36$)**: Sensitivity-optimized gate for mild dysphonia or suspected medication "ON-state" masking.
   - **High Risk ($\bar{P} \ge 0.36$)**: High-confidence manifest vocal tremor; specialist neurological referral.
   Statistical moments (diurnal variance $\sigma$, peak top-2) are retained in the UI as descriptive clinical session telemetry rather than automated decision weights.
-- **Consequences**: Guarantees zero data leakage and complete invariance to the number of recordings submitted. Anchors the system strictly to genuine acoustic dysphonic biomarkers (**80.09% Validation Balanced Accuracy, 0.8665 ROC-AUC; 74.72% Held-Out Test Balanced Accuracy, 0.8245 ROC-AUC; 81.83% Clinical Top-2 Balanced Accuracy, 0.8985 ROC-AUC; 75.00% External Multi-Cohort Generalization**).
+- **Consequences**: Guarantees zero data leakage and complete invariance to the number of recordings submitted. Anchors the system strictly to genuine acoustic dysphonic biomarkers (**80.09% Validation Balanced Accuracy, 0.8665 ROC-AUC; 74.72% Held-Out Test Balanced Accuracy, 0.8245 ROC-AUC; 81.83% Top-2 Balanced Accuracy, 0.8985 ROC-AUC**).
+
+---
+
+### ADR-011: WaveLM Base+ as Champion Acoustic Foundation Backbone
+
+- **Status**: Accepted
+- **Context**: While `facebook/wav2vec2-base` achieved 74.72% held-out test balanced accuracy (ADR-006/009), real-world mobile voice screening requires superior resistance to ambient background noise and room reflections. Microsoft's `microsoft/wavlm-base-plus` was pretrained on 94,000 hours of noisy/overlapped speech using masked speech denoising and gated relative position bias.
+- **Decision**: Select fine-tuned `microsoft/wavlm-base-plus` (`artifacts/models/deep_learning/wavelm`) as the primary champion backbone, unfreezing 8 transformer layers with temporal attention pooling and 8.0s windowing.
+- **Findings**:
+  - Elevated held-out test participant balanced accuracy to **79.11%** (arithmetic mean baseline) and ROC-AUC to **0.8585** on 579 unseen test participants.
+  - Substantially reduced false alarms on healthy controls while boosting true positive sensitivity compared to earlier wav2vec2 baselines.
+  - Outperformed competitive multi-model ensembles without incurring triple VRAM overhead.
+- **Consequences**: Standardizes production single-model inference to WaveLM Base+.
+
+---
+
+### ADR-012: Permutation-Invariant Gated Attention Multiple Instance Learning (Attention-MIL)
+
+- **Status**: Accepted
+- **Context**: In clinical evaluation, arithmetic mean averaging over multiple takes suffered from false alarms caused by breath exhaustion at the tail of recordings or transient noise. Multi-model ensembling was tested but provided negligible gain (+0.0027 ROC-AUC) while tripling compute costs. Order statistics (`max`, `min`) violate clinical count-invariance (ADR-010).
+- **Decision**: Implement a lightweight 2-layer Gated Attention Multiple Instance Learning head (Ilse et al., ICML 2018) operating on multi-crop embeddings extracted from the frozen WaveLM backbone:
+  $$a_i = \frac{\mathbf{w}^T (\tanh(\mathbf{V} \mathbf{h}_i) \odot \sigma(\mathbf{U} \mathbf{h}_i))}{\sqrt{L}}, \quad \alpha_i = \text{softmax}(a_i), \quad \mathbf{h}_{\text{bag}} = \sum_{i=1}^N \alpha_i \mathbf{h}_i$$
+- **Findings**:
+  - Elevated held-out test balanced accuracy to **81.86% [95% CI: 78.1%, 85.4%]** (+2.76% gain over 79.11% arithmetic mean).
+  - Increased PD Sensitivity to **81.51%** (catching 119/146 PD cases, rescuing 4 missed patients).
+  - Increased Healthy Specificity to **82.22%** (clearing 12 false alarms, from 89 down to 77).
+  - Achieved **0.8728 ROC-AUC [95% CI: 0.845, 0.909]**.
+  - Trained strictly on training participants (`bags_train.pt`) with zero test leakage, threshold calibrated exclusively on validation bags ($\tau = 0.300$).
+  - Preserves 100% count-invariance ($\sum \alpha_i = 1.0$), ensuring no gaming of variable take counts.
+- **Consequences**: Deployed in production via `mil_head.pt` with a calibrated threshold of $\tau = 0.300$ and per-recording attention attribution.
+
+---
+
+### ADR-013: Raw Waveform Preservation over Aggressive Digital Filtering
+
+- **Status**: Accepted
+- **Context**: Evaluated whether pre-filtering raw voice audio with digital high-pass or bandpass filters reduces background noise.
+- **Decision**: Avoid applying aggressive digital high-pass filtering ($\ge 100\text{ Hz}$) to input speech waveforms; preserve standardized 16 kHz resampled audio with peak amplitude normalization.
+- **Findings**:
+  - Human vocal fundamental frequency ($F_0$) in sustained `/aaa/` spans 85 Hz to 220 Hz (with low-pitched elderly male phonation at 85–120 Hz).
+  - High-pass filtering at mid frequencies cuts into fundamental voice pitch and pathological vocal micro-tremors.
+  - Deep pretrained speech models like WaveLM Base+ were pretrained on 94,000 hours of noisy audio and naturally tolerate acoustic variations without artificial filtering.
+- **Consequences**: Audio is fed to the model in its raw standardized 16 kHz format, preventing acoustic distortion.

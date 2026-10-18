@@ -2,7 +2,7 @@
   "config": {
     "data_root": "data/processed_audio",
     "metadata_root": "data/metadata",
-    "output_root": "artifacts/models/deep_learning/wavelm_v4",
+    "output_root": "artifacts/models/deep_learning/wavelm",
     "model_name": "microsoft/wavlm-base-plus",
     "batch_size": 16,
     "gradient_accumulation_steps": 2,

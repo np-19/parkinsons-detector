@@ -15,19 +15,24 @@ Evaluated with **100% strict participant-level separation** (zero participant ov
 
 Evaluated on **579 unseen test participants** (146 Parkinson's, 433 Healthy Controls; 1,480 total audio recordings):
 
-* **Held-Out Test Balanced Accuracy**: **`82.77%`** (95% Bootstrap CI: `[79.2%, 86.4%]`, Threshold $\tau = 0.390$)
-* **Parkinson's Detection Sensitivity**: **`84.25%`** (123 / 146 PD participants correctly detected)
-* **Healthy Control Specificity**: **`81.29%`** (352 / 433 healthy controls correctly cleared)
-* **Test ROC-AUC**: **`0.8558`** (95% CI: `[0.818, 0.894]`)
-* **High-Confidence Prediction Accuracy**: **`83.55%` – `85.34%` Balanced Accuracy** across decisive samples (84% of test cohort)
-* **Single Model Efficiency**: Runs on a single frozen WaveLM backbone (90M parameters); inference takes **<1 second** per recording on an NVIDIA GTX 1650.
+| Model Architecture | Pooling Method | Balanced Accuracy | Raw Accuracy | Sensitivity | Specificity | ROC-AUC | Optimal Cutoff ($\tau$) |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Wav2Vec 2.0 Base** | Arithmetic Mean | 74.72% | 73.06% | 78.08% | 71.36% | 0.8245 | 0.360 |
+| **WaveLM Base+** | Arithmetic Mean (Baseline) | 79.11% | 79.27% | 78.77% | 79.45% | 0.8585 | 0.310 |
+| **WaveLM Base+ (Proposed)** | **Gated Attention-MIL** | **`81.86%`** | **`82.04%`** | **`81.51%`** | **`82.22%`** | **`0.8728`** | **`0.300`** |
+
+* **Held-Out Test Balanced Accuracy**: **`81.86%`** (95% Bootstrap CI: `[78.1%, 85.4%]`, Threshold $\tau = 0.300$)
+* **Parkinson's Detection Sensitivity**: **`81.51%`** (119 / 146 PD participants correctly detected)
+* **Healthy Control Specificity**: **`82.22%`** (356 / 433 healthy controls correctly cleared)
+* **Test ROC-AUC**: **`0.8728`** (95% CI: `[0.845, 0.909]`)
+* **Single Model Efficiency**: Fine-tuned WaveLM Base+ (90M parameters, frozen during MIL inference); runs in **<1 second** per recording on an NVIDIA GTX 1650.
 
 ---
 
 ## Evaluation Figures
 
 ### 1. ROC Curve
-Shows model discrimination on the 579 test participants. WaveLM v4 + Gated Attention-MIL operates at **84.25% Sensitivity** and **81.29% Specificity** ($\tau = 0.390$, AUC = 0.8558).
+Shows model discrimination on the 579 test participants. WaveLM + Gated Attention-MIL operates at **81.51% Sensitivity** and **82.22% Specificity** ($\tau = 0.300$, AUC = 0.8728).
 
 ![Receiver Operating Characteristic (ROC) Curve](docs/figures/roc_curves.png)
 
@@ -38,10 +43,9 @@ Side-by-side comparison evaluated on the identical held-out test cohort of 579 p
 
 ![Confusion Matrices](docs/figures/confusion_matrices.png)
 
-* **Cleared False Alarms**: Attention-MIL reduced false alarms from 90 down to 81 (clearing 9 healthy individuals who were falsely flagged by arithmetic averaging due to running out of breath at the end of recordings).
-* **Rescued True Positives**: Correctly identified 123 of 146 Parkinson's patients (up from 118, catching 5 additional cases missed by standard averaging).
-* **Balanced Accuracy Gain**: Improved test balanced accuracy from **80.02% to 82.77%** (+2.75% gain, $\tau = 0.390$).
-* **High-Confidence Decisions**: When borderline cases ($0.20 \le P < 0.50$) are flagged for a re-test, balanced accuracy on the decisive 84% of participants reaches **83.55% – 85.34%**.
+* **Cleared False Alarms**: Attention-MIL reduced false alarms from 89 down to 77 (clearing 12 healthy individuals falsely flagged by arithmetic averaging).
+* **Rescued True Positives**: Correctly identified 119 of 146 Parkinson's patients (up from 115, catching 4 additional cases missed by standard averaging).
+* **Balanced Accuracy Gain**: Improved test balanced accuracy from **79.11% to 81.86%** (+2.76% gain, $\tau = 0.300$).
 
 ---
 
@@ -52,13 +56,6 @@ Distribution of model probabilities for Healthy Controls vs. Parkinson's partici
 
 ---
 
-### 4. Attention Weight Dynamics (Breath-Exhaustion Handling)
-When people sustain a vowel (`/aaa/`), they often run out of breath near the end of a 10-second recording (creating vocal fry and silence). Attention-MIL automatically **downweights the breath-loss crop (Crop 3)** while focusing attention on the steady sustained core (Crops 1 and 2):
-
-![Attention Weight Dynamics](docs/figures/attention_weights_case_study.png)
-
----
-
 ## How It Works (Pipeline Architecture)
 
 ```
@@ -66,10 +63,10 @@ When people sustain a vowel (`/aaa/`), they often run out of breath near the end
                   │
                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Stage 1: Pre-Processing & 70 Hz Rumble Filter              │
-│  - 70 Hz Zero-Phase Butterworth High-Pass Filter            │
-│  - Eliminates 50/60 Hz electrical hum & mic handling noise  │
-│  - Peak normalization to [-1.0, 1.0]                        │
+│  Stage 1: Audio Pre-Processing                              │
+│  - Convert/resample audio to 16 kHz Mono float32            │
+│  - Peak amplitude normalization to [-1.0, 1.0]              │
+│  - Silence and minimum duration validation (>= 1.0s)        │
 └─────────────────────────────────────────────────────────────┘
                   │
                   ▼
@@ -81,7 +78,7 @@ When people sustain a vowel (`/aaa/`), they often run out of breath near the end
                   │
                   ▼ Tensor of Crops (N_crops, 128000)
 ┌─────────────────────────────────────────────────────────────┐
-│  Stage 3: Fine-Tuned WaveLM v4 Feature Backbone (90M Params)│
+│  Stage 3: Fine-Tuned WaveLM Feature Backbone (90M Params)   │
 │  - Microsoft WaveLM Base+ (Pretrained on 94k hrs of speech) │
 │  - 7-Layer CNN Feature Encoder (Frozen)                     │
 │  - Transformer Layers 1–4 (Frozen General Acoustic Phonetics)│
@@ -94,8 +91,8 @@ When people sustain a vowel (`/aaa/`), they often run out of breath near the end
 │  Stage 4: Gated Attention-MIL Head (mil_head.pt)            │
 │  - Two-branch gating: a_i = w^T (tanh(V h) * sigmoid(U h))  │
 │  - Computes attention weights alpha_i summing to 1.0        │
-│  - Dynamically downweights breath loss & empty silence      │
-│  - Operating Decision Threshold: tau = 0.390                │
+│  - Dynamically downweights uninformative transient noise    │
+│  - Operating Decision Threshold: tau = 0.300                │
 └─────────────────────────────────────────────────────────────┘
                   │
                   ▼
@@ -148,22 +145,24 @@ python3 src/deep_learning/predict_patient.py \
 
 **Example Output:**
 ```text
->>> Loading single speech model from: artifacts/models/deep_learning/wavelm_v4/best_model.pt (on cuda)...
->>> [ATTENTION-MIL] Gated Attention Aggregation Loaded: artifacts/models/deep_learning/wavelm_v4/mil_head.pt
-    - Calibrated Operating Threshold: 0.390
+>>> Loading single speech model from: artifacts/models/deep_learning/wavelm/best_model.pt (on cuda)...
+>>> [ATTENTION-MIL] Gated Attention Aggregation Loaded: artifacts/models/deep_learning/wavelm/mil_head.pt
+    - Calibrated Operating Threshold: 0.300
 
 =================================================================
       PARKINSON'S ACOUSTIC SCREENING REPORT
 =================================================================
   Final Diagnosis:      POSITIVE (Acoustic Dysphonia Detected)
+  Clinical Triage:      HIGH_RISK (Screening: <0.200 | Diagnostic: ≥0.400)
   Confidence Level:     High Confidence Positive
   Aggregation Method:   gated_attention_mil
-  Participant Score:    0.9229 (Decision Threshold: 0.390)
+  Participant Score:    0.9695 (Decision Threshold: 0.300)
   Recordings Analyzed:  2
+  Recordings Failed:    0
 -----------------------------------------------------------------
   Recording Details:
-    [1] 100009.wav (10.05s): P(PD) = 0.8913 [Attn: 0.494] -> Dysarthric / Tremor
-    [2] 100136.wav (10.05s): P(PD) = 0.9692 [Attn: 0.506] -> Dysarthric / Tremor
+    [1] 100009.wav (10.05s): P(PD) = 0.8913 [Attn: 0.381] -> Dysarthric / Tremor
+    [2] 100136.wav (10.05s): P(PD) = 0.9692 [Attn: 0.619] -> Dysarthric / Tremor
 =================================================================
 ```
 

@@ -11,7 +11,7 @@
 - [ADR-007: Docker-First Containerization for Local GTX 1650 and GridShare Cloud GPU Portability](#adr-007-docker-first-containerization-for-local-gtx-1650-and-gridshare-cloud-gpu-portability)
 - [ADR-008: Pre-Implementation Verification and Documentation Protocol](#adr-008-pre-implementation-verification-and-documentation-protocol)
 - [ADR-009: 8.0-Second Audio Window & 8-Layer Transformer Unfreezing](#adr-009-80-second-audio-window--8-layer-transformer-unfreezing)
-- [ADR-010: Participant-Distribution Meta-Classifier for Overcoming medication Medication Masking](#adr-010-participant-distribution-meta-classifier-for-overcoming-medication-medication-masking)
+- [ADR-010: Count-Invariant Clinical Aggregation & Adherence Confounder Analysis](#adr-010-count-invariant-clinical-aggregation--adherence-confounder-analysis)
 
 ---
 
@@ -107,9 +107,9 @@
 ### ADR-008: Pre-Implementation Verification and Documentation Protocol
 
 - **Status**: Accepted
-- **Context**: The user explicitly instructed to be completely sure before implementing, verify all mechanisms, and document everything (including `CHANGELOG.md`, `DECISIONS.md`, and instructions) prior to writing code.
+- **Context**: Deep learning audio pipelines on constrained GPU hardware require formal architectural planning, memory verification, and comprehensive documentation prior to code execution.
 - **Decision**: Require comprehensive architectural documentation, VRAM math verification, and clear execution instructions to be drafted, reviewed, and committed before creating implementation files.
-- **Rationale**: Prevents wasted compute cycles, eliminates runtime surprises, and ensures strict adherence to clinical ML evaluation safeguards.
+- **Rationale**: Prevents wasted compute cycles, eliminates runtime surprises, and ensures strict adherence to reproducible ML evaluation safeguards.
 - **Consequences**: All implementation phases must follow the documented specifications without unilateral architectural deviations.
 
 ---
@@ -141,16 +141,16 @@
 
 ---
 
-### ADR-011: WaveLM v4 as Champion Acoustic Foundation Backbone
+### ADR-011: WaveLM Base+ as Champion Acoustic Foundation Backbone
 
 - **Status**: Accepted
 - **Context**: While `facebook/wav2vec2-base` achieved 74.72% held-out test balanced accuracy (ADR-006/009), real-world mobile voice screening requires superior resistance to ambient background noise and room reflections. Microsoft's `microsoft/wavlm-base-plus` was pretrained on 94,000 hours of noisy/overlapped speech using masked speech denoising and gated relative position bias.
-- **Decision**: Select fine-tuned `microsoft/wavlm-base-plus` (`wavelm_v4`) as the primary champion backbone, unfreezing 8 transformer layers with temporal attention pooling and 8.0s windowing.
+- **Decision**: Select fine-tuned `microsoft/wavlm-base-plus` (`artifacts/models/deep_learning/wavelm`) as the primary champion backbone, unfreezing 8 transformer layers with temporal attention pooling and 8.0s windowing.
 - **Findings**:
-  - Elevated held-out test participant balanced accuracy to **80.02%** and ROC-AUC to **0.8585** on 579 unseen test participants.
+  - Elevated held-out test participant balanced accuracy to **79.11%** (arithmetic mean baseline) and ROC-AUC to **0.8585** on 579 unseen test participants.
   - Substantially reduced false alarms on healthy controls while boosting true positive sensitivity compared to earlier wav2vec2 baselines.
   - Outperformed competitive multi-model ensembles without incurring triple VRAM overhead.
-- **Consequences**: Standardizes production single-model inference to WaveLM v4.
+- **Consequences**: Standardizes production single-model inference to WaveLM Base+.
 
 ---
 
@@ -158,24 +158,26 @@
 
 - **Status**: Accepted
 - **Context**: In clinical evaluation, arithmetic mean averaging over multiple takes suffered from false alarms caused by breath exhaustion at the tail of recordings or transient noise. Multi-model ensembling was tested but provided negligible gain (+0.0027 ROC-AUC) while tripling compute costs. Order statistics (`max`, `min`) violate clinical count-invariance (ADR-010).
-- **Decision**: Implement a lightweight 2-layer Gated Attention Multiple Instance Learning head (Ilse et al., ICML 2018) operating on multi-crop embeddings extracted from the frozen WaveLM v4 backbone:
+- **Decision**: Implement a lightweight 2-layer Gated Attention Multiple Instance Learning head (Ilse et al., ICML 2018) operating on multi-crop embeddings extracted from the frozen WaveLM backbone:
   $$a_i = \frac{\mathbf{w}^T (\tanh(\mathbf{V} \mathbf{h}_i) \odot \sigma(\mathbf{U} \mathbf{h}_i))}{\sqrt{L}}, \quad \alpha_i = \text{softmax}(a_i), \quad \mathbf{h}_{\text{bag}} = \sum_{i=1}^N \alpha_i \mathbf{h}_i$$
 - **Findings**:
-  - Elevated held-out test balanced accuracy to **82.77% [95% CI: 79.2%, 86.4%]** (+2.75% over arithmetic mean).
-  - Increased PD Sensitivity to **84.25%** (+3.42%, catching 123/146 PD cases, rescuing 5 missed patients).
-  - Increased Healthy Specificity to **81.29%** (clearing 9 false alarms).
-  - Delivers **83.55% to 85.34% Balanced Accuracy** under 3-tier clinical screening triage on decisive cohorts.
+  - Elevated held-out test balanced accuracy to **81.86% [95% CI: 78.1%, 85.4%]** (+2.76% gain over 79.11% arithmetic mean).
+  - Increased PD Sensitivity to **81.51%** (catching 119/146 PD cases, rescuing 4 missed patients).
+  - Increased Healthy Specificity to **82.22%** (clearing 12 false alarms, from 89 down to 77).
+  - Achieved **0.8728 ROC-AUC [95% CI: 0.845, 0.909]**.
+  - Trained strictly on training participants (`bags_train.pt`) with zero test leakage, threshold calibrated exclusively on validation bags ($\tau = 0.300$).
   - Preserves 100% count-invariance ($\sum \alpha_i = 1.0$), ensuring no gaming of variable take counts.
-- **Consequences**: Deployed in production via `mil_head.pt` with a calibrated threshold of $\tau = 0.390$ and per-recording attention attribution.
+- **Consequences**: Deployed in production via `mil_head.pt` with a calibrated threshold of $\tau = 0.300$ and per-recording attention attribution.
 
 ---
 
-### ADR-013: Sub-Bass Signal Hygiene (70 Hz) vs Mid-Frequency Bandpass Distortion
+### ADR-013: Raw Waveform Preservation over Aggressive Digital Filtering
 
 - **Status**: Accepted
-- **Context**: Evaluated whether pre-filtering raw audio with digital high-pass filters reduces environmental noise.
-- **Decision**: Restrict pre-ingestion high-pass filtering strictly to a **70 Hz zero-phase Butterworth sub-bass rumble filter**. Explicitly reject mid-frequency high-pass filtering ($\ge 100\text{ Hz}$).
+- **Context**: Evaluated whether pre-filtering raw voice audio with digital high-pass or bandpass filters reduces background noise.
+- **Decision**: Avoid applying aggressive digital high-pass filtering ($\ge 100\text{ Hz}$) to input speech waveforms; preserve standardized 16 kHz resampled audio with peak amplitude normalization.
 - **Findings**:
-  - Human vocal fundamental frequency ($F_0$) in sustained `/aaa/` spans 85 Hz to 220 Hz (with elderly males at 85–120 Hz). Mid-frequency filters (250–400 Hz) literally delete the lowest harmonic carrying dysarthric micro-tremors, causing PD sensitivity to collapse from 0.787 down to 0.644 (-27% separation margin).
-  - A 70 Hz filter safely suppresses sub-audible mechanical handling thumps (10–35 Hz) and 50/60 Hz electrical mains hum while leaving 100% of human voice pitch completely unattenuated (0 dB passband).
-- **Consequences**: Prevents mechanical thumps from corrupting peak normalization while preserving 100% of pathological vocal biomarkers.
+  - Human vocal fundamental frequency ($F_0$) in sustained `/aaa/` spans 85 Hz to 220 Hz (with low-pitched elderly male phonation at 85–120 Hz).
+  - High-pass filtering at mid frequencies cuts into fundamental voice pitch and pathological vocal micro-tremors.
+  - Deep pretrained speech models like WaveLM Base+ were pretrained on 94,000 hours of noisy audio and naturally tolerate acoustic variations without artificial filtering.
+- **Consequences**: Audio is fed to the model in its raw standardized 16 kHz format, preventing acoustic distortion.

@@ -54,9 +54,9 @@ class PredictionResponse(BaseModel):
         le=1.0,
         description="Deprecated compatibility alias for participant_mean_score",
     )
-    threshold: float = Field(default=0.36, description="Balanced diagnostic cutoff threshold")
-    screening_cutoff: float = Field(default=0.26, description="Screening triage cutoff derived from the checkpoint threshold")
-    diagnostic_cutoff: float = Field(default=0.46, description="Diagnostic triage cutoff derived from the checkpoint threshold")
+    threshold: float = Field(default=0.30, description="Balanced diagnostic cutoff threshold")
+    screening_cutoff: float = Field(default=0.20, description="Screening triage cutoff derived from the checkpoint threshold")
+    diagnostic_cutoff: float = Field(default=0.40, description="Diagnostic triage cutoff derived from the checkpoint threshold")
     recordings_analyzed: int = Field(..., description="Count of recordings analyzed")
     distribution: StatisticalDistribution = Field(..., description="Statistical distribution metrics")
     recordings: List[RecordingResult] = Field(..., description="Breakdown of each recording evaluated")
@@ -72,12 +72,12 @@ class PredictionResponse(BaseModel):
 
 class MetaStatsResponse(BaseModel):
     """Threshold and aggregation configuration used by patient inference."""
-    threshold: float = 0.36
-    screening_cutoff: float = 0.26
-    diagnostic_cutoff: float = 0.46
-    aggregation: str = "arithmetic_mean"
+    threshold: float = 0.30
+    screening_cutoff: float = 0.20
+    diagnostic_cutoff: float = 0.50
+    aggregation: str = "gated_attention_mil"
     score_field: str = "participant_mean_score"
-    model_version: str = "Wav2Vec2_v2 (mPower)"
+    model_version: str = "WaveLM + Gated Attention-MIL (mPower)"
     # Deprecated compatibility fields retained for existing API consumers.
     weights: List[float] = Field(default_factory=list)
     reference_means: List[float] = Field(default_factory=list)
@@ -89,7 +89,7 @@ class HealthResponse(BaseModel):
     """Healthcheck and runtime environment status."""
     status: str = "healthy"
     model_loaded: bool
-    model_version: str = "Wav2Vec2_v2 (mPower)"
+    model_version: str = "WaveLM + Gated Attention-MIL (mPower)"
     device: str
     torch_version: str
     supported_formats: List[str]

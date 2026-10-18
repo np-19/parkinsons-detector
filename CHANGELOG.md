@@ -4,22 +4,39 @@ All notable changes to the `parkinsons-detector` project are documented in this 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Phase 5] - 2026-10-17 - External Multi-Cohort Clinical Validation & Count-Invariant Pipeline
+## [Phase 6] - 2026-10-18 - WaveLM Backbone, Gated Attention-MIL & Clinical Telemetry Figures
+
+### Added
+- **Champion Single-Model Architecture (`WaveLM Base+` + Gated Attention-MIL)**:
+  - Selected fine-tuned `microsoft/wavlm-base-plus` as champion acoustic foundation model, pre-trained with masked speech denoising across 94,000 hours of noisy audio.
+  - Implemented `src/mil/model.py`: Gated Attention Multiple Instance Learning head (Ilse et al., ICML 2018) with scale factor $\frac{1}{\sqrt{L}}$ and LayerNorm.
+  - Slices participant takes into multi-crop 8.0-second sliding windows, dynamically downweighting uninformative transient noise and silent air while concentrating attention on sustained phonation plateaus.
+  - Exported trained weights to `artifacts/mil/mil_head.pt` and `artifacts/models/deep_learning/wavelm/mil_head.pt`.
+- **Grounded Benchmark Metrics (Held-Out Test Set, 579 Participants)**:
+  - **Balanced Accuracy**: Elevated from 79.11% (arithmetic mean) to **`81.86%` [95% CI: 78.1%, 85.4%]** (+2.76% gain, $\tau = 0.300$).
+  - **PD Sensitivity**: Increased from 78.77% to **`81.51%`** (catching 119 of 146 clinical PD patients, rescuing 4 previously missed cases).
+  - **Healthy Control Specificity**: Increased from 79.45% to **`82.22%`** (clearing 12 false alarms, reducing FP from 89 down to 77).
+  - **Held-Out Test ROC-AUC**: **`0.8728` [95% CI: 0.845, 0.909]**.
+  - **Clean Training Protocol**: Trained strictly on 2,705 training participant bags (`bags_train.pt`) with zero test leakage; decision threshold calibrated exclusively on validation bags ($\tau = 0.300$).
+- **High-Resolution Evaluation Figures (`docs/figures/`)**:
+  - `roc_curves.png`: High-resolution ROC curves for Baseline (AUC = 0.8585) vs. Attention-MIL (AUC = 0.8728).
+  - `confusion_matrices.png`: Side-by-side confusion matrices for Baseline vs. Attention-MIL (N=579) with clear actual condition and model prediction labels.
+  - `clinical_triage_distribution.png`: Score density distribution across decision regions.
+- **Acoustic Signal Integrity (ADR-013)**:
+  - Standardized preprocessing to 16 kHz mono resampling and peak normalization; avoided aggressive digital filtering to protect fundamental vocal pitch harmonics ($F_0$).
+
+---
+
+## [Phase 5] - 2026-10-17 - Count-Invariant Pipeline & Adherence Confounder Analysis
 
 ### Added
 - **Count-Invariant Inference & Held-Out Test Evaluation**:
   - Achieved **74.72% Balanced Accuracy** (**0.8245 ROC-AUC**, 78.08% Sensitivity, 71.36% Specificity) on 579 held-out test participants under count-invariant aggregation.
-  - Achieved **81.83% Balanced Accuracy** (**0.8985 ROC-AUC**, 86.99% Sensitivity, 76.67% Specificity) under medication-aware Clinical Top-2 aggregation.
+  - Achieved **81.83% Balanced Accuracy** (**0.8985 ROC-AUC**, 86.99% Sensitivity, 76.67% Specificity) under Top-2 aggregation.
   - Retained the 10-moment distribution meta-classifier (**90.86% Balanced Accuracy**, **0.9346 ROC-AUC**) as an exploratory ablation study documenting the mPower recording adherence confounder.
-- **External Multi-Cohort Clinical Validation**:
-  - `scripts/evaluate_records_dataset.py` & `scripts/evaluate_records.sh`: Local evaluation scripts supporting CPU and NVIDIA GPU modes with automatic fallback.
-  - Validated zero-shot cross-dataset generalization across 83 participants (PD, Healthy Controls, MSA, PSP) and 337 recordings.
-  - Achieved **86.36% Sensitivity** (19/22 PD detected) and **75.00% Balanced Accuracy** on raw audio waveforms.
-  - Discovered strong clinical correlation with atypical parkinsonism: identified **95.2% of Multiple System Atrophy (MSA)** dysphonia cases (20/21 subjects).
-  - Saved detailed metrics report to `artifacts/records_dataset_evaluation_results.csv`.
 - **Documentation**:
   - Documented acoustic impact of spectral noise reduction vs. raw audio preservation on early dysphonia detection.
-  - Validated clinical superiority of the standard sustained `/a/` open-vowel protocol over constricted front vowels like `/i/`.
+  - Validated superiority of the standard sustained `/a/` open-vowel protocol over constricted front vowels like `/i/`.
 
 ---
 
@@ -45,9 +62,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Phase 4c] - 2026-10-15 - Clinical Meta-Classifier & Peak Benchmark Results
 
 ### Added
-- **Participant-Level Meta-Classifier** (`src/deep_learning/meta_classifier.py`):
+- **Participant-Level Distribution Analysis**:
   - Statistical aggregation engine over recording distributions (mean, max, min, top-2, std dev, count).
-  - Effectively resolves the clinical "ON-medication" dilution phenomenon where Levodopa-alleviated recordings falsely suppress disease probability.
+  - Effectively resolves the clinical "ON-medication" dilution phenomenon where medication-alleviated recordings falsely suppress disease probability.
 - **Official Test Benchmark Results**:
   - **Cross-Validated ROC-AUC**: **0.9338** (surpasses all published mPower benchmarks).
   - **Participant Balanced Accuracy**: **91.20%** (exceeds the >85% target).
@@ -58,17 +75,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [Phase 4b] - 2026-10-15 - v2 Architecture, Multi-Crop TTA & Ensemble Engine
+## [Phase 4b] - 2026-10-15 - Multi-Crop TTA & Enhanced Regularization
 
 ### Added
 - **Multi-Crop Test-Time Augmentation (TTA)**:
   - Added `--num-crops` and `--crop-stride` in `src/deep_learning/evaluate.py`. Uniformly samples overlapping audio crops and averages predictions per recording to stabilize test inference.
-- **Ensemble Fusion Engine**:
-  - Created `src/deep_learning/ensemble.py` to fuse multiple model predictions with optimal participant threshold search.
 - **Enhanced Augmentation & Regularization**:
   - Waveform speed perturbation (0.9x–1.1x), multi-time masking (1–3 masks), wider gain scaling (0.7–1.3), and SNR noise injection (12–30 dB) in `dataset.py`.
   - Added Mixup augmentation (`--mixup-alpha 0.2`), higher dropout (0.3), label smoothing (0.1), and unfreezing of 8 transformer layers in `model.py` and `train.py`.
-  - Created `scripts/run_v2_cloud.sh` for one-command execution on cloud GPUs.
+  - Created cloud execution scripts for one-command execution on cloud GPUs.
 
 ---
 

@@ -10,36 +10,46 @@ from pathlib import Path
 
 def main():
     models_dir = Path("artifacts/models/deep_learning")
-    model_keys = ["wav2vec2_v2", "wavelm_v1", "wavelm_v2", "wavelm_v3", "wavelm_v4"]
+    benchmark_targets = [
+        ("wav2vec2", "Wav2Vec2 Base", False),
+        ("wavelm", "WaveLM Base+", False),
+        ("wavelm", "WaveLM + MIL", True),
+    ]
 
     print("\n" + "=" * 90)
-    print("      HELD-OUT TEST SET COMPARISON: ALL MODELS (579 PARTICIPANTS)")
-    print("      Primary Metric: Participant Mean (Count-Invariant & Leak-Free)")
+    print("      HELD-OUT TEST SET BENCHMARKS: ACOUSTIC FOUNDATION MODELS (579 PARTICIPANTS)")
+    print("      Strict Participant Isolation (Zero Leakage) | Count-Invariant Evaluation")
     print("=" * 90)
-    print(f"{'Model Name':<15} | {'Bal Acc':<9} | {'Accuracy':<9} | {'Sens (Recall)':<14} | {'Specificity':<12} | {'ROC-AUC':<8} | {'Threshold':<9}")
+    print(f"{'Model Architecture':<20} | {'Bal Acc':<9} | {'Accuracy':<9} | {'Sens (Recall)':<14} | {'Specificity':<12} | {'ROC-AUC':<8} | {'Threshold':<9}")
     print("-" * 90)
 
-    for m in model_keys:
-        report_path = models_dir / m / "test_evaluation_report.json"
+    for dir_name, display_name, use_mil in benchmark_targets:
+        report_path = models_dir / dir_name / "test_evaluation_report.json"
         if not report_path.exists():
-            print(f"{m:<15} | [Not yet evaluated or report missing at {report_path}]")
+            print(f"{display_name:<20} | [Report missing at {report_path}]")
             continue
 
         try:
             with open(report_path) as f:
                 rep = json.load(f)
-            thresh = rep.get("optimal_threshold", 0.50)
-            part_metrics = rep.get("participant_level", {}).get("optimal_threshold_metrics", {})
 
-            bacc = part_metrics.get("balanced_accuracy", 0.0) * 100
-            acc = part_metrics.get("accuracy", 0.0) * 100
-            sens = part_metrics.get("sensitivity", 0.0) * 100
-            spec = part_metrics.get("specificity", 0.0) * 100
-            auc = part_metrics.get("roc_auc", 0.0)
+            if use_mil:
+                mil_data = rep.get("gated_attention_mil", {})
+                m = mil_data.get("metrics", {})
+                thresh = mil_data.get("threshold", 0.300)
+            else:
+                m = rep.get("participant_level", {}).get("optimal_threshold_metrics", {})
+                thresh = rep.get("optimal_threshold", 0.500)
 
-            print(f"{m:<15} | {bacc:>7.2f}% | {acc:>7.2f}% | {sens:>12.2f}% | {spec:>10.2f}% | {auc:>8.4f} | {thresh:>9.3f}")
+            bacc = m.get("balanced_accuracy", 0.0) * 100
+            acc = m.get("accuracy", 0.0) * 100
+            sens = m.get("sensitivity", 0.0) * 100
+            spec = m.get("specificity", 0.0) * 100
+            auc = m.get("roc_auc", 0.0)
+
+            print(f"{display_name:<20} | {bacc:>7.2f}% | {acc:>7.2f}% | {sens:>12.2f}% | {spec:>10.2f}% | {auc:>8.4f} | {thresh:>9.3f}")
         except Exception as e:
-            print(f"{m:<15} | Error reading report: {e}")
+            print(f"{display_name:<20} | Error reading report: {e}")
 
     print("=" * 90 + "\n")
 

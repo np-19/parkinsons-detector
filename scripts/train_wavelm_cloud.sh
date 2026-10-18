@@ -68,14 +68,14 @@ if [ ! -d "data/processed_audio" ] || [ $(ls -1 data/processed_audio 2>/dev/null
 fi
 
 # --- 5. Directory Setup ---
-OUTPUT_DIR="artifacts/models/deep_learning/wavelm_v1"
+OUTPUT_DIR="${1:-artifacts/models/deep_learning/wavelm}"
 mkdir -p "$OUTPUT_DIR"
 
 # --- 6. Launch WaveLM Fine-Tuning ---
 echo -e "\n======================================================================"
 echo " STAGE 1: Fine-Tuning WaveLM (microsoft/wavelm-base-plus) on mPower"
 echo " Configuration:"
-echo "   - Backbone        : microsoft/wavelm-base-plus (Pretrained on 60,000h speech)"
+echo "   - Backbone        : microsoft/wavelm-base-plus (Pretrained on 94,000h speech)"
 echo "   - Window Duration : 8.0 seconds (128,000 samples @ 16 kHz)"
 echo "   - Batch Size      : 16 (Gradient Acc: 2 -> Effective Batch Size: 32)"
 echo "   - Trainable Layers: Transformer Layers 5-12 (Layers 1-4 frozen, CNN frozen)"
@@ -120,20 +120,6 @@ python3 -m src.deep_learning.evaluate \
   --device cuda \
   --fp16
 
-
-# --- 9. Multi-Backbone Ensemble Fusion (WaveLM + Wav2Vec2) ---
-WAV2VEC2_PRED="artifacts/models/deep_learning/wav2vec2_v2/test_predictions.csv"
-WAVELM_PRED="$OUTPUT_DIR/test_predictions.csv"
-
-if [ -f "$WAV2VEC2_PRED" ] && [ -f "$WAVELM_PRED" ]; then
-  echo -e "\n======================================================================"
-  echo " STAGE 4: Multi-Backbone Ensemble Fusion (WaveLM 60% + Wav2Vec2 40%)"
-  echo "======================================================================"
-  python3 -m src.deep_learning.ensemble \
-    --prediction-files "$WAVELM_PRED" "$WAV2VEC2_PRED" \
-    --weights 0.6 0.4 \
-    --output-file artifacts/models/deep_learning/ensemble_wavelm_wav2vec2_predictions.csv
-fi
 
 echo -e "\n======================================================================"
 echo " [SUCCESS] WAVELM CLOUD TRAINING PIPELINE COMPLETE!"
