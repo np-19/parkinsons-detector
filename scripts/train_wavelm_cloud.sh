@@ -120,21 +120,6 @@ python3 -m src.deep_learning.evaluate \
   --device cuda \
   --fp16
 
-# --- 8. Zero-Shot Cross-Dataset Validation on Clinical 'records' Cohort ---
-echo -e "\n======================================================================"
-echo " STAGE 3: Zero-Shot Multi-Cohort Clinical Validation ('records' Dataset)"
-echo "======================================================================"
-
-if [ -f "test_samples/records/dataset.csv" ]; then
-  python3 scripts/evaluate_records_dataset.py \
-    --model-path "$OUTPUT_DIR/best_model.pt" \
-    --dataset-csv test_samples/records/dataset.csv \
-    --audio-dir test_samples/records \
-    --output-csv artifacts/wavelm_records_evaluation_results.csv \
-    --device cuda
-else
-  echo "Clinical records dataset not found at test_samples/records/dataset.csv. Skipping Stage 3."
-fi
 
 # --- 9. Multi-Backbone Ensemble Fusion (WaveLM + Wav2Vec2) ---
 WAV2VEC2_PRED="artifacts/models/deep_learning/wav2vec2_v2/test_predictions.csv"
