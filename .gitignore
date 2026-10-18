@@ -34,6 +34,8 @@ __pycache__/
 *.ckpt
 *.safetensors
 *.bin
+!artifacts/mil/mil_head.pt
+!artifacts/models/deep_learning/wavelm_v4/mil_head.pt
 
 # Local logs and temporary files
 *.log

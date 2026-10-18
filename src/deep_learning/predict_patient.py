@@ -30,14 +30,16 @@ def dot(w: List[float], x: List[float]) -> float:
     return sum(wi * xi for wi, xi in zip(w, x))
 
 
-# Default model and calibrated threshold (WaveLM v4 best model)
+# Default model and calibrated threshold (WaveLM v4 best model + Attention-MIL)
 DEFAULT_WAVELM_PATH = "artifacts/models/deep_learning/wavelm_v4/best_model.pt"
 DEFAULT_WAV2VEC2_PATH = "artifacts/models/deep_learning/wav2vec2_v2/best_model.pt"
+DEFAULT_MIL_PATH = "artifacts/models/deep_learning/wavelm_v4/mil_head.pt"
 
 WAVELM_OPTIMAL_THRESHOLD = 0.310
-ACOUSTIC_OPTIMAL_THRESHOLD = WAVELM_OPTIMAL_THRESHOLD
-SCREENING_CUTOFF = 0.210
-DIAGNOSTIC_CUTOFF = 0.410
+MIL_OPTIMAL_THRESHOLD = 0.390
+ACOUSTIC_OPTIMAL_THRESHOLD = MIL_OPTIMAL_THRESHOLD
+SCREENING_CUTOFF = 0.290
+DIAGNOSTIC_CUTOFF = 0.490
 
 # Backward-compatibility reference exports for API endpoints
 META_WEIGHTS = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -48,11 +50,13 @@ META_THRESHOLD = ACOUSTIC_OPTIMAL_THRESHOLD
 
 
 class PatientPredictor:
-    """End-to-end patient inference pipeline powered by WaveLM v4 best model."""
+    """End-to-end patient inference pipeline powered by WaveLM v4 + Gated Attention-MIL."""
 
     def __init__(
         self,
         model_path: Union[str, Path] = DEFAULT_WAVELM_PATH,
+        mil_model_path: Optional[Union[str, Path]] = DEFAULT_MIL_PATH,
+        use_attention_mil: bool = True,
         secondary_model_path: Optional[Union[str, Path]] = None,
         use_ensemble: bool = False,
         ensemble_weights: tuple = (0.75, 0.25),
@@ -60,13 +64,16 @@ class PatientPredictor:
         device: Optional[str] = None,
         duration: float = 8.0,
         sample_rate: int = 16000,
-        num_crops: int = 5,
+        num_crops: int = 3,
     ):
         self.device = torch.device(device if device else ("cuda" if torch.cuda.is_available() else "cpu"))
         self.duration = duration
         self.sample_rate = sample_rate
         self.num_crops = num_crops
         self.ensemble_weights = ensemble_weights
+        self.use_attention_mil = use_attention_mil
+        self.mil_model_path = Path(mil_model_path) if mil_model_path else None
+        self.mil_model = None
 
         def _load_model_and_config(ckpt_path):
             from src.deep_learning.model import build_speech_model
@@ -116,8 +123,31 @@ class PatientPredictor:
             self.duration = float(cfg.get("duration", duration))
             self.sample_rate = int(cfg.get("sample_rate", sample_rate) or sample_rate)
             self.target_length = int(self.duration * self.sample_rate)
-            self.optimal_threshold = threshold if threshold is not None else float(ckpt.get("optimal_threshold", ACOUSTIC_OPTIMAL_THRESHOLD))
-            print(f"    - Calibrated Operating Threshold: {self.optimal_threshold:.3f}")
+            self.optimal_threshold = threshold if threshold is not None else float(ckpt.get("optimal_threshold", WAVELM_OPTIMAL_THRESHOLD))
+            print(f"    - Backbone Operating Threshold: {self.optimal_threshold:.3f}")
+
+        # Initialize Gated Attention-MIL aggregation head
+        if self.use_attention_mil and self.mil_model_path and self.mil_model_path.exists():
+            try:
+                from src.mil.model import GatedAttentionMIL
+                mil_ckpt = torch.load(self.mil_model_path, map_location=self.device, weights_only=False)
+                mil_cfg = mil_ckpt.get("config", {})
+                self.mil_model = GatedAttentionMIL(
+                    in_dim=mil_cfg.get("in_dim", 768),
+                    attention_dim=mil_cfg.get("attention_dim", 128),
+                    hidden_dim=mil_cfg.get("hidden_dim", 128),
+                    dropout=mil_cfg.get("dropout", 0.25),
+                    use_residual_mean=mil_cfg.get("use_residual_mean", False),
+                )
+                self.mil_model.load_state_dict(mil_ckpt["model_state_dict"])
+                self.mil_model.to(self.device).eval()
+                if threshold is None:
+                    self.optimal_threshold = float(mil_ckpt.get("optimal_threshold", MIL_OPTIMAL_THRESHOLD))
+                print(f">>> [ATTENTION-MIL] Gated Attention Aggregation Loaded: {self.mil_model_path}")
+                print(f"    - Calibrated Operating Threshold: {self.optimal_threshold:.3f}")
+            except Exception as e:
+                print(f"    [Warning] Failed to load Attention-MIL head ({e}); falling back to arithmetic mean.")
+                self.mil_model = None
 
     def load_audio(self, audio_path: Union[str, Path]) -> torch.Tensor:
         """Load and preprocess audio to the checkpoint sample rate in mono."""
@@ -187,7 +217,7 @@ class PatientPredictor:
         waveform = waveform / max_val
         return waveform
 
-    def infer_single_recording(self, waveform: torch.Tensor) -> float:
+    def infer_single_recording(self, waveform: torch.Tensor, return_embeddings: bool = False):
         """Predict PD probability for a single audio recording using multi-crop TTA."""
         n_samples = waveform.shape[0]
         crops = []
@@ -208,6 +238,7 @@ class PatientPredictor:
         with torch.no_grad():
             outputs1 = self.model(input_values=batch)
             p1 = float(outputs1["probabilities"][:, 1].mean().item())
+            embs = outputs1["embeddings"].cpu()
 
             if self.is_ensemble and self.secondary_model is not None:
                 outputs2 = self.secondary_model(input_values=batch)
@@ -225,6 +256,8 @@ class PatientPredictor:
             else:
                 rec_prob = p1
 
+        if return_embeddings:
+            return rec_prob, embs
         return rec_prob
 
     def predict_patient(self, audio_paths: List[Union[str, Path]]) -> Dict:
@@ -234,10 +267,12 @@ class PatientPredictor:
 
         recording_results = []
         failed_recordings = []
+        all_embs = []
         for path in audio_paths:
             try:
                 waveform = self.load_audio(path)
-                prob = self.infer_single_recording(waveform)
+                prob, embs = self.infer_single_recording(waveform, return_embeddings=True)
+                all_embs.append(embs)
                 recording_results.append({
                     "file": str(path),
                     "duration_seconds": round(waveform.shape[0] / self.sample_rate, 2),
@@ -247,6 +282,7 @@ class PatientPredictor:
                         if prob >= self.optimal_threshold
                         else "Normal Phonation"
                     ),
+                    "attention_weight": round(1.0 / len(audio_paths), 4),
                 })
             except Exception as e:
                 failed_recordings.append({
@@ -271,8 +307,32 @@ class PatientPredictor:
         var_p = sum((x - mean_p) ** 2 for x in probs) / n
         std_p = math.sqrt(var_p)
 
-        # Count-invariant participant acoustic score: arithmetic mean of recording probabilities
-        participant_score = mean_p
+        # Gated Attention-MIL participant aggregation
+        aggregation_method = "arithmetic_mean"
+        crop_weights_list = None
+        if self.use_attention_mil and self.mil_model is not None and all_embs:
+            bag_tensor = torch.cat(all_embs, dim=0).to(self.device)
+            with torch.no_grad():
+                mil_out = self.mil_model(bag_tensor)
+                participant_score = float(mil_out["probability"].item())
+                crop_weights = mil_out["attention_weights"].cpu().numpy()
+                crop_weights_list = [round(float(w), 4) for w in crop_weights]
+
+            aggregation_method = "gated_attention_mil"
+            # Map crop attention weights back to each individual recording
+            crops_per_rec = self.num_crops
+            for idx, r in enumerate(recording_results):
+                r_start = idx * crops_per_rec
+                r_end = r_start + crops_per_rec
+                if r_end <= len(crop_weights):
+                    rec_weight = float(np.sum(crop_weights[r_start:r_end]))
+                    r["attention_weight"] = round(rec_weight, 4)
+                else:
+                    r["attention_weight"] = round(1.0 / len(recording_results), 4)
+        else:
+            participant_score = mean_p
+            for r in recording_results:
+                r["attention_weight"] = round(1.0 / len(recording_results), 4)
 
         # Clinical Triage Framework (Calibrated around validation-selected optimal threshold)
         balanced_threshold = self.optimal_threshold
@@ -347,6 +407,8 @@ class PatientPredictor:
             "clinical_warnings": warnings,
             "recordings_detail": recording_results,
             "failed_recordings": failed_recordings,
+            "aggregation_method": aggregation_method,
+            "attention_weights": crop_weights_list,
         }
 
 
@@ -401,8 +463,9 @@ def main():
         f"Diagnostic: ≥{report['diagnostic_cutoff']:.3f})"
     )
     print(f"  Confidence Level:     {report['confidence_level']}")
+    print(f"  Aggregation Method:   {report.get('aggregation_method', 'arithmetic_mean')}")
     print(
-        f"  Participant Mean:     {report['participant_mean_score']:.4f} "
+        f"  Participant Score:    {report['participant_mean_score']:.4f} "
         f"(Decision Threshold: {report['meta_threshold']:.3f})"
     )
     print(f"  Recordings Analyzed:  {report['recordings_analyzed']}")
@@ -418,7 +481,8 @@ def main():
     print("-" * 65)
     print("  Recording Details:")
     for i, r in enumerate(report["recordings_detail"], 1):
-        print(f"    [{i}] {Path(r['file']).name} ({r['duration_seconds']}s): P(PD) = {r['probability_PD']} -> {r['recording_status']}")
+        att_str = f" [Attn: {r['attention_weight']:.3f}]" if r.get('attention_weight') is not None else ""
+        print(f"    [{i}] {Path(r['file']).name} ({r['duration_seconds']}s): P(PD) = {r['probability_PD']}{att_str} -> {r['recording_status']}")
     for failure in report["failed_recordings"]:
         print(f"    [Failed] {Path(failure['file']).name}: {failure['error']}")
 

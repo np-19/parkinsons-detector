@@ -11,8 +11,11 @@ import torch
 from backend.config import (
     DEVICE,
     ENSEMBLE_THRESHOLD,
+    MIL_PATH,
+    MIL_THRESHOLD,
     MODEL_PATH,
     SECONDARY_MODEL_PATH,
+    USE_ATTENTION_MIL,
     USE_ENSEMBLE,
 )
 from backend.schemas import (
@@ -60,19 +63,22 @@ class PredictorService:
             return
 
         logger.info(
-            "Initializing PatientPredictor (WaveLM best model, ensemble=%s, device=%s)...",
+            "Initializing PatientPredictor (WaveLM best model, MIL=%s, ensemble=%s, device=%s)...",
+            USE_ATTENTION_MIL,
             self.use_ensemble,
             self.device,
         )
         self.predictor = PatientPredictor(
             model_path=self.model_path,
+            mil_model_path=MIL_PATH,
+            use_attention_mil=USE_ATTENTION_MIL,
             secondary_model_path=self.secondary_model_path if self.use_ensemble else None,
             use_ensemble=self.use_ensemble,
-            threshold=self.threshold,
+            threshold=self.threshold if self.use_ensemble else None,
             device=self.device,
             duration=8.0,
             sample_rate=16000,
-            num_crops=5,
+            num_crops=3,
         )
         logger.info("PatientPredictor initialized successfully on %s.", self.predictor.device)
 
@@ -120,6 +126,7 @@ class PredictorService:
                         duration_seconds=rec["duration_seconds"],
                         probability_pd=rec["probability_PD"],
                         recording_status=rec["recording_status"],
+                        attention_weight=rec.get("attention_weight"),
                     )
                 )
 
@@ -167,6 +174,8 @@ class PredictorService:
                 recordings=recordings,
                 failed_recordings=failed_recordings,
                 clinical_warnings=raw_result["clinical_warnings"],
+                aggregation_method=raw_result.get("aggregation_method", "gated_attention_mil"),
+                attention_weights=raw_result.get("attention_weights"),
             )
 
         finally:
@@ -184,16 +193,18 @@ class PredictorService:
         )
         screening_cutoff = max(0.15, threshold - 0.10)
         diagnostic_cutoff = min(0.85, threshold + 0.10)
+        is_mil = bool(predictor and getattr(predictor, "mil_model", None) is not None)
         model_ver = (
             "Option B Ensemble (WaveLM v4 [75%] + Wav2Vec2 v2 [25%])"
             if (predictor and getattr(predictor, "is_ensemble", False))
-            else "WaveLM v4 (mPower)"
+            else ("WaveLM v4 + Gated Attention-MIL (mPower)" if is_mil else "WaveLM v4 (mPower)")
         )
+        agg_name = "gated_attention_mil" if is_mil else "arithmetic_mean"
         return MetaStatsResponse(
             threshold=round(threshold, 3),
             screening_cutoff=round(screening_cutoff, 3),
             diagnostic_cutoff=round(diagnostic_cutoff, 3),
-            aggregation="arithmetic_mean",
+            aggregation=agg_name,
             score_field="participant_mean_score",
             model_version=model_ver,
             weights=META_WEIGHTS,

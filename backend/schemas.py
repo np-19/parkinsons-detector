@@ -1,5 +1,5 @@
 """Pydantic data models for request and response serialization."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -12,6 +12,10 @@ class RecordingResult(BaseModel):
     recording_status: str = Field(
         ...,
         description="Local status using the checkpoint-selected acoustic threshold",
+    )
+    attention_weight: Optional[float] = Field(
+        default=None,
+        description="Relative Gated Attention-MIL importance weight for this recording",
     )
 
 
@@ -61,7 +65,9 @@ class PredictionResponse(BaseModel):
         description="Uploaded recordings rejected before model inference",
     )
     clinical_warnings: List[str] = Field(default_factory=list, description="Clinical advisories and pharmacological masking warnings")
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    aggregation_method: str = Field(default="gated_attention_mil", description="Participant-level aggregation method")
+    attention_weights: Optional[List[float]] = Field(default=None, description="Per-crop attention weights")
 
 
 class MetaStatsResponse(BaseModel):
