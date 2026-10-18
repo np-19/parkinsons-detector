@@ -106,6 +106,9 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
               <div className="text-2xl font-bold font-mono text-slate-900">
                 {participantScore.toFixed(4)}
               </div>
+              <div className="text-[10px] text-blue-600 font-medium mt-0.5">
+                {report.aggregation_method === "gated_attention_mil" ? "Gated Attention-MIL" : "Arithmetic Mean"}
+              </div>
             </div>
           </div>
         );
@@ -235,42 +238,59 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
           Acoustic Session Analysis Breakdown
         </div>
 
-        <div className="border border-slate-200/80 rounded-xl overflow-x-auto scrollbar-thin">
-          <table className="w-full text-xs text-left min-w-[500px]">
-            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
-              <tr>
-                <th className="py-2.5 px-3 font-semibold">Take #</th>
-                <th className="py-2.5 px-3 font-semibold">Filename</th>
-                <th className="py-2.5 px-3 font-semibold">Duration</th>
-                <th className="py-2.5 px-3 font-semibold">Raw P(PD)</th>
-                <th className="py-2.5 px-3 font-semibold">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {report.recordings.map((rec, i) => (
-                <tr key={i} className="hover:bg-slate-50/50">
-                  <td className="py-2.5 px-3 font-medium text-slate-700">Take {i + 1}</td>
-                  <td className="py-2.5 px-3 text-slate-900 font-mono truncate max-w-[160px]">{rec.filename}</td>
-                  <td className="py-2.5 px-3 text-slate-500 font-mono">{rec.duration_seconds.toFixed(1)}s</td>
-                  <td className="py-2.5 px-3 font-mono font-medium text-slate-800">
-                    {rec.probability_pd.toFixed(4)}
-                  </td>
-                  <td className="py-2.5 px-3">
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                        rec.recording_status.includes("Tremor")
-                          ? "bg-rose-50 text-rose-700 border border-rose-200/60"
-                          : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
-                      }`}
-                    >
-                      {rec.recording_status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {(() => {
+          const hasAttentionWeights = report.recordings.some(
+            (r) => r.attention_weight !== undefined && r.attention_weight !== null
+          );
+          return (
+            <div className="border border-slate-200/80 rounded-xl overflow-x-auto scrollbar-thin">
+              <table className="w-full text-xs text-left min-w-[500px]">
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-3 font-semibold">Take #</th>
+                    <th className="py-2.5 px-3 font-semibold">Filename</th>
+                    <th className="py-2.5 px-3 font-semibold">Duration</th>
+                    <th className="py-2.5 px-3 font-semibold">Raw P(PD)</th>
+                    {hasAttentionWeights && (
+                      <th className="py-2.5 px-3 font-semibold text-blue-700">MIL Attention</th>
+                    )}
+                    <th className="py-2.5 px-3 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {report.recordings.map((rec, i) => (
+                    <tr key={i} className="hover:bg-slate-50/50">
+                      <td className="py-2.5 px-3 font-medium text-slate-700">Take {i + 1}</td>
+                      <td className="py-2.5 px-3 text-slate-900 font-mono truncate max-w-[160px]">{rec.filename}</td>
+                      <td className="py-2.5 px-3 text-slate-500 font-mono">{rec.duration_seconds.toFixed(1)}s</td>
+                      <td className="py-2.5 px-3 font-mono font-medium text-slate-800">
+                        {rec.probability_pd.toFixed(4)}
+                      </td>
+                      {hasAttentionWeights && (
+                        <td className="py-2.5 px-3 font-mono font-semibold text-blue-700">
+                          {rec.attention_weight !== undefined && rec.attention_weight !== null
+                            ? `${(rec.attention_weight * 100).toFixed(1)}%`
+                            : "—"}
+                        </td>
+                      )}
+                      <td className="py-2.5 px-3">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                            rec.recording_status.includes("Tremor")
+                              ? "bg-rose-50 text-rose-700 border border-rose-200/60"
+                              : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                          }`}
+                        >
+                          {rec.recording_status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Clinical Observations & Pharmacological Guardrails */}

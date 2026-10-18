@@ -3,6 +3,7 @@ export interface RecordingResult {
   duration_seconds: number;
   probability_pd: number;
   recording_status: string;
+  attention_weight?: number;
 }
 
 export interface FailedRecording {
@@ -36,6 +37,8 @@ export interface PredictionResponse {
   failed_recordings: FailedRecording[];
   clinical_warnings: string[];
   timestamp: string;
+  aggregation_method?: string;
+  attention_weights?: number[];
 }
 
 export interface HealthResponse {
