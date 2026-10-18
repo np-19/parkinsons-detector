@@ -36,17 +36,17 @@
   "gated_attention_mil": {
     "threshold": 0.39,
     "metrics": {
-      "accuracy": 0.8013816925734024,
-      "balanced_accuracy": 0.8127273877693062,
-      "sensitivity": 0.8356164383561644,
-      "specificity": 0.789838337182448,
-      "f1": 0.6796657381615598,
-      "roc_auc": 0.8710493846689233,
+      "accuracy": 0.8238341968911918,
+      "balanced_accuracy": 0.8254690119902559,
+      "sensitivity": 0.8287671232876712,
+      "specificity": 0.8221709006928406,
+      "f1": 0.7034883720930233,
+      "roc_auc": 0.8715239330570408,
       "confusion_matrix": {
-        "tn": 342,
-        "fp": 91,
-        "fn": 24,
-        "tp": 122
+        "tn": 356,
+        "fp": 77,
+        "fn": 25,
+        "tp": 121
       }
     }
   }

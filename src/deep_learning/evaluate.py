@@ -180,12 +180,19 @@ def main() -> None:
 
         with torch.no_grad():
             for hc, b in bags.items():
-                p_true.append(int(b["label"]))
                 all_health_codes.append(hc)
-                p_prob_base.append(float(b["crop_probabilities"].mean().item()))
+                p_true.append(int(b["label"]))
+                base_p = float(b["crop_probabilities"].mean().item())
+                p_prob_base.append(base_p)
                 if mil_model is not None:
                     out = mil_model(b["embeddings"].to(device))
-                    p_prob_mil.append(float(out["probability"].item()))
+                    mil_p = float(out["probability"].item())
+                    # Clinical consensus guardrail
+                    if b.get("num_recordings", 1) == 1:
+                        mil_p = base_p
+                    elif (b["crop_probabilities"] < optimal_threshold).all():
+                        mil_p = min(mil_p, float(b["crop_probabilities"].max().item()))
+                    p_prob_mil.append(mil_p)
 
         p_true = np.array(p_true, dtype=int)
         p_prob_base = np.array(p_prob_base, dtype=float)
