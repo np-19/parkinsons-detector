@@ -196,6 +196,7 @@ def main() -> None:
                         crop_probabilities=b["crop_probabilities"],
                         num_recordings=b.get("num_recordings", len(b["embeddings"]) // 3),
                         recording_threshold=optimal_threshold,
+                        participant_threshold=mil_threshold,
                     )
                     p_prob_mil.append(prod_res["participant_score"])
 

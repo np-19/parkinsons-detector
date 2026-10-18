@@ -46,13 +46,20 @@ class PredictionResponse(BaseModel):
         default=None,
         ge=0.0,
         le=1.0,
-        description="Arithmetic mean of recording-level Parkinson's probabilities",
+        description=(
+            "Final participant-level Parkinson's score produced by the production pipeline: "
+            "a 50:50 blend of attention-weighted recording probabilities and the Gated "
+            "Attention-MIL model probability, bounded by the clinical consensus guardrail."
+        ),
     )
     meta_classifier_score: float = Field(
         ...,
         ge=0.0,
         le=1.0,
-        description="Deprecated compatibility alias for participant_mean_score",
+        description=(
+            "Deprecated compatibility alias returning the exact value of participant_mean_score "
+            "(the 50:50 Attention-MIL production blended score)."
+        ),
     )
     threshold: float = Field(default=0.30, description="Balanced diagnostic cutoff threshold")
     screening_cutoff: float = Field(default=0.20, description="Screening triage cutoff derived from the checkpoint threshold")

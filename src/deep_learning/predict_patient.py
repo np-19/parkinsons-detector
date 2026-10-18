@@ -21,6 +21,8 @@ import numpy as np
 import torch
 import torchaudio
 
+from src.mil.model import score_production_bag
+
 
 def sigmoid(z: float) -> float:
     return 1.0 / (1.0 + math.exp(-max(min(z, 20.0), -20.0)))
@@ -208,7 +210,12 @@ class PatientPredictor:
         waveform = waveform / max_val
         return waveform
 
-    def infer_single_recording(self, waveform: torch.Tensor, return_embeddings: bool = False):
+    def infer_single_recording(
+        self,
+        waveform: torch.Tensor,
+        return_embeddings: bool = False,
+        return_crop_probs: bool = False,
+    ):
         """Predict PD probability for a single audio recording using multi-crop TTA."""
         n_samples = waveform.shape[0]
         crops = []
@@ -228,9 +235,12 @@ class PatientPredictor:
         batch = torch.stack(crops, dim=0).to(self.device)
         with torch.no_grad():
             outputs = self.model(input_values=batch)
-            rec_prob = float(outputs["probabilities"][:, 1].mean().item())
+            crop_probs = outputs["probabilities"][:, 1].cpu()
+            rec_prob = float(crop_probs.mean().item())
             embs = outputs["embeddings"].cpu()
 
+        if return_embeddings and return_crop_probs:
+            return rec_prob, embs, crop_probs
         if return_embeddings:
             return rec_prob, embs
         return rec_prob
@@ -243,21 +253,25 @@ class PatientPredictor:
         recording_results = []
         failed_recordings = []
         all_embs = []
+        all_crop_probs = []
         for path in audio_paths:
             try:
                 waveform = self.load_audio(path)
-                prob, embs = self.infer_single_recording(waveform, return_embeddings=True)
+                prob, embs, crop_probs = self.infer_single_recording(
+                    waveform, return_embeddings=True, return_crop_probs=True
+                )
                 all_embs.append(embs)
+                all_crop_probs.append(crop_probs)
                 recording_results.append({
                     "file": str(path),
                     "duration_seconds": round(waveform.shape[0] / self.sample_rate, 2),
-                    "probability_PD": round(prob, 4),
+                    "probability_PD": prob,
                     "recording_status": (
                         "Dysarthric / Tremor"
                         if prob >= self.recording_threshold
                         else "Normal Phonation"
                     ),
-                    "attention_weight": round(1.0 / len(audio_paths), 4),
+                    "attention_weight": 1.0 / len(audio_paths),
                 })
             except Exception as e:
                 failed_recordings.append({
@@ -272,60 +286,56 @@ class PatientPredictor:
             )
             raise RuntimeError(f"No valid audio files could be processed. {details}")
 
-        probs = sorted([r["probability_PD"] for r in recording_results])
-        n = len(probs)
-        mean_p = sum(probs) / n
-        max_p = probs[-1]
-        min_p = probs[0]
-        top2_p = sum(probs[-2:]) / min(n, 2)
-        p75_p = probs[min(int(n * 0.75), n - 1)]
-        var_p = sum((x - mean_p) ** 2 for x in probs) / n
+        raw_rec_probs = [float(cp.mean().item()) for cp in all_crop_probs]
+        sorted_raw = sorted(raw_rec_probs)
+        n = len(sorted_raw)
+        mean_p = sum(sorted_raw) / n
+        max_p = sorted_raw[-1]
+        min_p = sorted_raw[0]
+        top2_p = sum(sorted_raw[-2:]) / min(n, 2)
+        p75_p = sorted_raw[min(int(n * 0.75), n - 1)]
+        var_p = sum((x - mean_p) ** 2 for x in sorted_raw) / n
         std_p = math.sqrt(var_p)
 
         # Gated Attention-MIL participant aggregation
-        # Unified scoring rule across all bag sizes (Issue 1):
-        # Even for single recording sessions (n == 1), run the MIL head over the available
-        # multi-crop embeddings, compute instance attention, 50:50 blend, and guardrail.
+        # Unified scoring rule: Route directly through score_production_bag (single source of truth)
         aggregation_method = "arithmetic_mean"
         crop_weights_list = None
+        mil_prob = mean_p
         if self.use_attention_mil and self.mil_model is not None and all_embs:
             bag_tensor = torch.cat(all_embs, dim=0).to(self.device)
-            with torch.no_grad():
-                mil_out = self.mil_model(bag_tensor)
-                mil_prob = float(mil_out["probability"].item())
-                crop_weights = mil_out["attention_weights"].detach().cpu().numpy()
-                crop_weights_list = [round(float(w), 4) for w in crop_weights]
+            crop_probs_tensor = torch.cat(all_crop_probs, dim=0)
+
+            score_res = score_production_bag(
+                mil_model=self.mil_model,
+                bag_embeddings=bag_tensor,
+                crop_probabilities=crop_probs_tensor,
+                num_recordings=len(recording_results),
+                recording_threshold=self.recording_threshold,
+                participant_threshold=self.optimal_threshold,
+                crops_per_rec=self.num_crops,
+            )
 
             aggregation_method = "gated_attention_mil"
-            crops_per_rec = self.num_crops
-            total_w = 0.0
+            participant_score = score_res["participant_score"]
+            mil_prob = score_res["mil_prob"]
+            crop_weights_list = score_res["crop_weights"]
+
+            # Update recording details with exact helper-calculated unrounded values
             for idx, r in enumerate(recording_results):
-                r_start = idx * crops_per_rec
-                r_end = r_start + crops_per_rec
-                if r_end <= len(crop_weights):
-                    rec_weight = float(np.sum(crop_weights[r_start:r_end]))
-                else:
-                    rec_weight = 1.0 / len(recording_results)
-                r["attention_weight"] = rec_weight
-                total_w += rec_weight
-
-            # Normalize weights to sum to 1.0
-            if total_w > 1e-6:
-                for r in recording_results:
-                    r["attention_weight"] = round(r["attention_weight"] / total_w, 4)
-
-            # Attention-weighted instance probability
-            weighted_p = sum(r["attention_weight"] * r["probability_PD"] for r in recording_results)
-            participant_score = 0.5 * weighted_p + 0.5 * mil_prob
-
-            # Clinical Consensus Guardrail:
-            # If ALL recordings are unanimously below the recording threshold (Normal Phonation),
-            # the participant cannot be declared Positive.
-            if all(r["probability_PD"] < self.recording_threshold for r in recording_results):
-                participant_score = min(participant_score, max_p)
+                rec_p = score_res["rec_probs"][idx]
+                rec_w = score_res["rec_weights"][idx]
+                r["probability_PD"] = round(rec_p, 4)
+                r["recording_status"] = (
+                    "Dysarthric / Tremor"
+                    if rec_p >= self.recording_threshold
+                    else "Normal Phonation"
+                )
+                r["attention_weight"] = round(rec_w, 4)
         else:
             participant_score = mean_p
             for r in recording_results:
+                r["probability_PD"] = round(r["probability_PD"], 4)
                 r["attention_weight"] = round(1.0 / len(recording_results), 4)
 
         # Clinical Triage Framework (Calibrated around validation-selected optimal threshold)
@@ -386,6 +396,8 @@ class PatientPredictor:
             # Keep the legacy key for clients that still consume API v2.0.
             "participant_mean_score": round(participant_score, 4),
             "meta_classifier_score": round(participant_score, 4),
+            "raw_participant_score": float(participant_score),
+            "mil_probability": round(mil_prob, 4),
             "meta_threshold": balanced_threshold,
             "recording_threshold": round(self.recording_threshold, 3),
             "screening_cutoff": screening_cutoff,

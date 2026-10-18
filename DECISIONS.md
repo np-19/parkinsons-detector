@@ -161,10 +161,10 @@
 - **Decision**: Implement a lightweight 2-layer Gated Attention Multiple Instance Learning head (Ilse et al., ICML 2018) operating on multi-crop embeddings extracted from the frozen WaveLM backbone:
   $$a_i = \frac{\mathbf{w}^T (\tanh(\mathbf{V} \mathbf{h}_i) \odot \sigma(\mathbf{U} \mathbf{h}_i))}{\sqrt{L}}, \quad \alpha_i = \text{softmax}(a_i), \quad \mathbf{h}_{\text{bag}} = \sum_{i=1}^N \alpha_i \mathbf{h}_i$$
 - **Findings**:
-  - Elevated held-out test balanced accuracy to **82.43% [95% CI: 78.8%, 86.0%]** (+3.32% gain over 79.11% arithmetic mean).
+  - Elevated held-out test balanced accuracy to **82.54% [95% CI: 79.0%, 86.1%]** (+3.44% gain over 79.11% arithmetic mean).
   - Increased PD Sensitivity to **83.56%** (catching 122/146 PD cases, rescuing 7 missed patients).
-  - Increased Healthy Specificity to **81.29%** (clearing 8 false alarms, from 89 down to 81).
-  - Achieved **0.8790 ROC-AUC [95% CI: 0.845, 0.912]**.
+  - Increased Healthy Specificity to **81.52%** (clearing 9 false alarms, from 89 down to 80).
+  - Achieved **0.8791 ROC-AUC [95% CI: 0.845, 0.912]**.
   - Trained strictly on training participants (`bags_train.pt`) with zero test leakage, operating threshold calibrated exclusively on validation bags ($\tau = 0.300$, acoustic recording threshold $\tau_{\text{rec}} = 0.310$).
   - Preserves 100% count-invariance ($\sum \alpha_i = 1.0$), ensuring no gaming of variable take counts.
 - **Consequences**: Deployed in production via `mil_head.pt` using unified bag scoring (50:50 blend with attention-weighted recording probabilities and clinical consensus guardrail) across all bag sizes ($n \ge 1$) with separated thresholds ($\tau_{\text{part}} = 0.300$, $\tau_{\text{rec}} = 0.310$).

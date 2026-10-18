@@ -134,6 +134,7 @@ def score_production_bag(
     crop_probabilities: torch.Tensor,
     num_recordings: int,
     recording_threshold: float = 0.310,
+    participant_threshold: float = 0.300,
     crops_per_rec: int = 3,
 ) -> Dict:
     """Score a participant bag using the complete deployed production scoring pipeline.
@@ -145,7 +146,8 @@ def score_production_bag(
     4. Compute attention-weighted recording probability: sum(w_i * p_i).
     5. 50:50 blend: participant_score = 0.5 * weighted_p + 0.5 * mil_prob.
     6. Clinical Consensus Guardrail: If all recordings are below recording_threshold,
-       cap participant_score at max(p_i).
+       strictly enforce that the participant cannot receive a positive diagnosis
+       (participant_score is capped below participant_threshold).
     """
     import numpy as np
 
@@ -179,12 +181,18 @@ def score_production_bag(
         weighted_p = sum(w * p for w, p in zip(rec_weights, rec_probs))
         blend_p = 0.5 * weighted_p + 0.5 * mil_prob
 
-        # Clinical consensus guardrail
+        # Clinical consensus guardrail:
+        # If ALL recordings are unanimously below recording_threshold (Normal Phonation),
+        # the participant cannot be declared Positive. The participant score is capped at
+        # min(max(rec_probs), participant_threshold - 1e-4), guaranteeing participant_score < participant_threshold.
         max_rec_p = max(rec_probs) if rec_probs else blend_p
         if all(p < recording_threshold for p in rec_probs):
-            final_p = min(blend_p, max_rec_p)
+            guardrail_ceiling = min(max_rec_p, participant_threshold - 1e-4)
+            final_p = min(blend_p, guardrail_ceiling)
+            guardrail_active = True
         else:
             final_p = blend_p
+            guardrail_active = False
 
         return {
             "participant_score": float(final_p),
@@ -194,5 +202,6 @@ def score_production_bag(
             "rec_probs": rec_probs,
             "rec_weights": rec_weights,
             "crop_weights": [round(float(w), 4) for w in crop_weights],
+            "guardrail_active": guardrail_active,
         }
 

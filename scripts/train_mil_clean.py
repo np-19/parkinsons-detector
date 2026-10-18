@@ -44,6 +44,7 @@ def evaluate_mil_model(
     bags: List[Dict],
     device: torch.device,
     recording_threshold: float = 0.310,
+    participant_threshold: float = 0.300,
     use_production_scoring: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, Dict[str, List[float]]]:
     model.eval()
@@ -61,6 +62,7 @@ def evaluate_mil_model(
                     crop_probabilities=b["crop_probabilities"],
                     num_recordings=b.get("num_recordings", len(b["embeddings"]) // 3),
                     recording_threshold=recording_threshold,
+                    participant_threshold=participant_threshold,
                 )
                 probs.append(prod_res["participant_score"])
                 attention_map[b["health_code"]] = prod_res["crop_weights"]
@@ -169,11 +171,15 @@ def train_mil_on_train_and_val(
     model.eval()
 
     # Calibrate decision threshold strictly on VALIDATION split using production pipeline
-    val_true, val_probs, val_attn = evaluate_mil_model(model, val_bags, device, recording_threshold=0.310, use_production_scoring=True)
-    opt_thresh, best_val_bal = find_optimal_threshold(val_true, val_probs)
-    # The production operating participant threshold is 0.300
     operating_threshold = 0.300
     recording_threshold = 0.310
+    val_true, val_probs, val_attn = evaluate_mil_model(
+        model, val_bags, device,
+        recording_threshold=recording_threshold,
+        participant_threshold=operating_threshold,
+        use_production_scoring=True,
+    )
+    opt_thresh, best_val_bal = find_optimal_threshold(val_true, val_probs)
     val_metrics = compute_metrics(val_true, val_probs, threshold=operating_threshold)
     print("\n" + "=" * 65)
     print(f" VALIDATION CALIBRATION RESULTS (Participant Threshold: {operating_threshold:.3f}, Rec: {recording_threshold:.3f})")
@@ -184,7 +190,12 @@ def train_mil_on_train_and_val(
     print("=" * 65)
 
     # ONE-SHOT FINAL EVALUATION ON UNTOUCHED HELD-OUT TEST BAGS
-    test_true, test_probs, test_attn = evaluate_mil_model(model, test_bags, device, recording_threshold=recording_threshold, use_production_scoring=True)
+    test_true, test_probs, test_attn = evaluate_mil_model(
+        model, test_bags, device,
+        recording_threshold=recording_threshold,
+        participant_threshold=operating_threshold,
+        use_production_scoring=True,
+    )
     test_metrics = compute_metrics(test_true, test_probs, threshold=operating_threshold)
     test_ci = compute_bootstrap_ci(test_true, test_probs, threshold=operating_threshold)
     test_metrics.update(test_ci)

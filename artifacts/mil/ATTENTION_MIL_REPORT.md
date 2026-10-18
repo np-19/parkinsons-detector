@@ -11,12 +11,12 @@
 
 | Metric | WaveLM Baseline (Arithmetic Mean) | Gated Attention-MIL (Adaptive Pooling) | Absolute Change ($\Delta$) |
 | :--- | :---: | :---: | :---: |
-| **Balanced Accuracy** | **79.11%** [75.0%, 83.0%] | **82.43%** [78.8%, 86.0%] | **+3.32%** |
-| **ROC-AUC** | **0.8585** [0.820, 0.890] | **0.8790** [0.845, 0.912] | **+0.0205** |
+| **Balanced Accuracy** | **79.11%** [75.0%, 83.0%] | **82.54%** [79.0%, 86.1%] | **+3.44%** |
+| **ROC-AUC** | **0.8585** [0.820, 0.890] | **0.8791** [0.845, 0.912] | **+0.0206** |
 | **Sensitivity (PD Recall)** | **78.77%** (115/146) | **83.56%** (122/146) | **+4.79%** |
-| **Specificity (Control Recall)**| **79.45%** (344/433) | **81.29%** (352/433) | **+1.85%** |
+| **Specificity (Control Recall)**| **79.45%** (344/433) | **81.52%** (353/433) | **+2.08%** |
 | **Operating Threshold** | **0.310** | **0.300** | - |
-| **Confusion Matrix (TN / FP / FN / TP)** | 344 / 89 / 31 / 115 | 352 / 81 / 24 / 122 | - |
+| **Confusion Matrix (TN / FP / FN / TP)** | 344 / 89 / 31 / 115 | 353 / 80 / 24 / 122 | - |
 
 ---
 
@@ -25,7 +25,7 @@
 - **Rescued PD Cases**: **8 participants** previously missed by arithmetic mean were successfully detected by Attention-MIL.
 - **Degraded PD Cases**: **1 participants**.
 - **Cleared False Positives**: **12 healthy participants** falsely alerted by arithmetic mean were cleared by Attention-MIL.
-- **New False Positives**: **4 participants**.
+- **New False Positives**: **3 participants**.
 
 ---
 

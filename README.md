@@ -19,12 +19,12 @@ Evaluated on **579 unseen test participants** (146 Parkinson's, 433 Healthy Cont
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Wav2Vec 2.0 Base** | Arithmetic Mean | 74.72% | 73.06% | 78.08% | 71.36% | 0.8245 | 0.360 |
 | **WaveLM Base+** | Arithmetic Mean (Baseline) | 79.11% | 79.27% | 78.77% | 79.45% | 0.8585 | 0.310 |
-| **WaveLM Base+ (Proposed)** | **Gated Attention-MIL** | **`82.43%`** | **`81.87%`** | **`83.56%`** | **`81.29%`** | **`0.8790`** | **`0.300`** |
+| **WaveLM Base+ (Proposed)** | **Gated Attention-MIL** | **`82.54%`** | **`82.04%`** | **`83.56%`** | **`81.52%`** | **`0.8791`** | **`0.300`** |
 
-* **Held-Out Test Balanced Accuracy**: **`82.43%`** (95% Bootstrap CI: `[78.8%, 86.0%]`, Operating Cutoff $\tau = 0.300$, Recording Cutoff $\tau_{\text{rec}} = 0.310$)
+* **Held-Out Test Balanced Accuracy**: **`82.54%`** (95% Bootstrap CI: `[79.0%, 86.1%]`, Operating Cutoff $\tau = 0.300$, Recording Cutoff $\tau_{\text{rec}} = 0.310$)
 * **Parkinson's Detection Sensitivity**: **`83.56%`** (122 / 146 PD participants correctly detected)
-* **Healthy Control Specificity**: **`81.29%`** (352 / 433 healthy controls correctly cleared)
-* **Test ROC-AUC**: **`0.8790`** (95% CI: `[0.845, 0.912]`)
+* **Healthy Control Specificity**: **`81.52%`** (353 / 433 healthy controls correctly cleared)
+* **Test ROC-AUC**: **`0.8791`** (95% CI: `[0.845, 0.912]`)
 * **Single Model Efficiency**: Fine-tuned WaveLM Base+ (90M parameters, frozen during MIL inference); runs in **<1 second** per recording on an NVIDIA GTX 1650.
 
 ---
@@ -32,7 +32,7 @@ Evaluated on **579 unseen test participants** (146 Parkinson's, 433 Healthy Cont
 ## Evaluation Figures
 
 ### 1. ROC Curve
-Shows model discrimination on the 579 test participants. WaveLM + Gated Attention-MIL operates at **83.56% Sensitivity** and **81.29% Specificity** ($\tau = 0.300$, AUC = 0.8790).
+Shows model discrimination on the 579 test participants. WaveLM + Gated Attention-MIL operates at **83.56% Sensitivity** and **81.52% Specificity** ($\tau = 0.300$, AUC = 0.8791).
 
 ![Receiver Operating Characteristic (ROC) Curve](docs/figures/roc_curves.png)
 
@@ -43,9 +43,9 @@ Side-by-side comparison evaluated on the identical held-out test cohort of 579 p
 
 ![Confusion Matrices](docs/figures/confusion_matrices.png)
 
-* **Cleared False Alarms**: Attention-MIL reduced false alarms from 89 down to 81 (clearing 8 healthy individuals falsely flagged by arithmetic averaging).
+* **Cleared False Alarms**: Attention-MIL reduced false alarms from 89 down to 80 (clearing 9 healthy individuals falsely flagged by arithmetic averaging).
 * **Rescued True Positives**: Correctly identified 122 of 146 Parkinson's patients (up from 115, catching 7 additional cases missed by standard averaging).
-* **Balanced Accuracy Gain**: Improved test balanced accuracy from **79.11% to 82.43%** (+3.32% gain, $\tau = 0.300$).
+* **Balanced Accuracy Gain**: Improved test balanced accuracy from **79.11% to 82.54%** (+3.44% gain, $\tau = 0.300$).
 
 ---
 

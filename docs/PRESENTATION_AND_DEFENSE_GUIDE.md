@@ -15,7 +15,7 @@ This guide provides clear, direct, and technically sound answers for college pro
 | **Backbone Model** | Fine-Tuned **Microsoft WaveLM Base+** (8 unfrozen Transformer layers, 90M parameters). |
 | **Aggregation Head** | **Gated Attention Multiple Instance Learning (Attention-MIL)** (`mil_head.pt`). |
 | **Hardware** | Trained & evaluated locally on an **NVIDIA GeForce GTX 1650 (4 GB VRAM)**. |
-| **Single-Model Accuracy** | **Balanced Accuracy: `82.43%`** (95% CI: `[78.8%, 86.0%]`), **Sensitivity: `83.56%`** (122/146), **Specificity: `81.29%`** (352/433), **ROC-AUC: `0.8790`**, Threshold $\tau = 0.300$ ($\tau_{\text{rec}} = 0.310$). |
+| **Single-Model Accuracy** | **Balanced Accuracy: `82.54%`** (95% CI: `[79.0%, 86.1%]`), **Sensitivity: `83.56%`** (122/146), **Specificity: `81.52%`** (353/433), **ROC-AUC: `0.8791`**, Threshold $\tau = 0.300$ ($\tau_{\text{rec}} = 0.310$). |
 | **Primary Baseline** | **Balanced Accuracy: `79.11%`**, ROC-AUC: `0.8585` (Arithmetic Mean, $\tau = 0.310$). |
 | **Inference Latency** | **< 1 second** per audio recording on GTX 1650. |
 
@@ -25,7 +25,7 @@ This guide provides clear, direct, and technically sound answers for college pro
 
 ### Figure 1: Receiver Operating Characteristic (ROC) Curve
 ![ROC Curves](figures/roc_curves.png)
-* **What to say**: *"Our WaveLM + Gated Attention-MIL model achieves an ROC-AUC of 0.8790 on 579 unseen test participants. At our validation-calibrated operating threshold ($\tau = 0.300$), it achieves 83.56% Sensitivity and 81.29% Specificity."*
+* **What to say**: *"Our WaveLM + Gated Attention-MIL model achieves an ROC-AUC of 0.8791 on 579 unseen test participants. At our validation-calibrated operating threshold ($\tau = 0.300$), it achieves 83.56% Sensitivity and 81.52% Specificity."*
 
 ---
 
@@ -34,9 +34,9 @@ This guide provides clear, direct, and technically sound answers for college pro
 * **What to say**: *"This figure compares our Baseline model against our Proposed WaveLM + Gated Attention-MIL model on all 579 held-out test participants (433 Healthy, 146 Parkinson's).
   - The vertical axis displays Ground Truth Status (Actual Healthy vs. Actual Parkinson's), and the horizontal axis shows the Model Prediction.
   - Slices are clearly labeled with counts, category names (True Healthy, False Alarm, Missed Case, Detected PD), and row percentages.
-  - Notice that Attention-MIL reduced false alarms from 89 down to 81 (clearing 8 healthy individuals falsely flagged by arithmetic averaging).
+  - Notice that Attention-MIL reduced false alarms from 89 down to 80 (clearing 9 healthy individuals falsely flagged by arithmetic averaging).
   - It also correctly detected 122 out of 146 Parkinson's patients (up from 115, catching 7 additional cases missed by standard averaging).
-  - This boosted balanced accuracy from **79.11% to 82.43%** (+3.32% gain) with zero test leakage."*
+  - This boosted balanced accuracy from **79.11% to 82.54%** (+3.44% gain) with zero test leakage."*
 
 ---
 
@@ -60,7 +60,7 @@ This guide provides clear, direct, and technically sound answers for college pro
 > **Answer**:
 > "We tested combining WaveLM with Wav2Vec 2.0 in an ensemble. While the ensemble gave a tiny improvement in ROC-AUC (+0.0027, from 0.8560 to 0.8587), it **tripled GPU memory usage and tripled inference time** because it has to load multiple 90M-parameter models.
 >
-> For our project, we decided that a 300% increase in compute cost for a negligible +0.0027 AUC gain is not practical. Instead, keeping single-model WaveLM and adding a lightweight Gated Attention-MIL head gave a solid +3.32% balanced accuracy jump, reaching **82.43%** (ROC-AUC: **0.8790**) while keeping inference under 1 second."
+> For our project, we decided that a 300% increase in compute cost for a negligible +0.0027 AUC gain is not practical. Instead, keeping single-model WaveLM and adding a lightweight Gated Attention-MIL head gave a solid +3.44% balanced accuracy jump, reaching **82.54%** (ROC-AUC: **0.8791**) while keeping inference under 1 second."
 
 ---
 
@@ -73,7 +73,7 @@ This guide provides clear, direct, and technically sound answers for college pro
 > We implemented Ilse et al.'s **Gated Attention-MIL**:
 > $$a_i = \mathbf{w}^T (\tanh(\mathbf{V} \mathbf{h}_i) \odot \sigma(\mathbf{U} \mathbf{h}_i)) \cdot \frac{1}{\sqrt{L}}, \quad \alpha_i = \text{softmax}(a_i)$$
 >
-> The attention head automatically learns which audio instance representations provide the strongest acoustic evidence for classification. Combined with the production blend and consensus guardrail, this eliminated 8 false alarms on healthy controls (from 89 down to 81) and detected 7 additional Parkinson's patients (up to 122)."
+> The attention head automatically learns which audio instance representations provide the strongest acoustic evidence for classification. Combined with the production blend and consensus guardrail, this eliminated 9 false alarms on healthy controls (from 89 down to 80) and detected 7 additional Parkinson's patients (up to 122)."
 
 ---
 
@@ -116,7 +116,7 @@ This guide provides clear, direct, and technically sound answers for college pro
 ### Q8: "How does the system achieve high diagnostic accuracy?"
 > **Answer**:
 > "Through grounded architectural design and rigorous evaluation stages:
-> 1. **Gated Attention-MIL Pooling**: Achieves **82.43% Balanced Accuracy [78.8%, 86.0% 95% CI]**, **83.56% Sensitivity** (122/146), **81.29% Specificity** (352/433), and **0.8790 ROC-AUC** across all 579 held-out test participants with zero data leakage.
+> 1. **Gated Attention-MIL Pooling**: Achieves **82.54% Balanced Accuracy [79.0%, 86.1% 95% CI]**, **83.56% Sensitivity** (122/146), **81.52% Specificity** (353/433), and **0.8791 ROC-AUC** across all 579 held-out test participants with zero data leakage.
 > 2. **High-Confidence Triage Bands**: For prediction probabilities outside the borderline band ($P < 0.20$ or $P \ge 0.50$, representing 84% of participants), balanced accuracy reaches **83.55% to 85.34%**, providing decisive separation for clinical review.
 > 3. **Acoustic Waveform Integrity**: Standardized 16 kHz resampling and peak normalization preserves vocal fold harmonics and micro-tremor dynamics without distorting filtering."
 
@@ -144,6 +144,6 @@ This guide provides clear, direct, and technically sound answers for college pro
 - [x] **Problem Statement**: Voice changes appear early in Parkinson's disease; non-invasive smartphone voice testing can assist early screening.
 - [x] **Dataset**: mPower dataset (3,868 participants, 9,986 recordings) with 100% strict participant-level splitting.
 - [x] **Single-Model Architecture**: Fine-tuned WaveLM Base+ (90M params) with Gated Attention-MIL pooling.
-- [x] **Show Figure 1 (ROC)**: 0.8790 ROC-AUC on 579 unseen test participants.
-- [x] **Show Figure 2 (Confusion Matrix)**: 83.56% Sensitivity, 81.29% Specificity ($\tau = 0.300$, $\tau_{\text{rec}} = 0.310$), clearing 8 false alarms (81 vs 89) and detecting 7 additional cases (122 vs 115).
+- [x] **Show Figure 1 (ROC)**: 0.8791 ROC-AUC on 579 unseen test participants.
+- [x] **Show Figure 2 (Confusion Matrix)**: 83.56% Sensitivity, 81.52% Specificity ($\tau = 0.300$, $\tau_{\text{rec}} = 0.310$), clearing 9 false alarms (80 vs 89) and detecting 7 additional cases (122 vs 115).
 - [x] **Engineering Highlights**: Standardized 16 kHz audio pipeline, GTX 1650 4GB VRAM optimization (AMP FP16), and <1 second inference latency.

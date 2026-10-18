@@ -215,3 +215,144 @@ def test_threshold_separation_and_documentation():
     assert MIL_PARTICIPANT_THRESHOLD == 0.300
     assert ACOUSTIC_OPTIMAL_THRESHOLD == 0.310
 
+
+def test_consensus_guardrail_guarantees_negative_classification():
+    """Verify consensus guardrail strictly prevents positive classification when all recordings < tau_rec.
+
+    Edge case: all recordings < 0.310, but the highest is 0.305 (in [0.300, 0.310)).
+    Even with high raw MIL probability (0.95), the score must be capped strictly below 0.300.
+    """
+    from src.mil.model import score_production_bag
+
+    class HighProbMIL(torch.nn.Module):
+        def forward(self, h):
+            n = h.shape[0]
+            return {
+                "probability": torch.tensor(0.95),
+                "attention_weights": torch.full((n,), 1.0 / n),
+            }
+
+    mock_model = HighProbMIL()
+    embs = torch.randn(6, 768)
+    # Both recordings are < 0.310 (normal phonation), but rec1 = 0.305 >= 0.300
+    crop_probs = torch.tensor([0.305, 0.305, 0.305, 0.280, 0.280, 0.280])
+
+    res = score_production_bag(
+        mil_model=mock_model,
+        bag_embeddings=embs,
+        crop_probabilities=crop_probs,
+        num_recordings=2,
+        recording_threshold=0.310,
+        participant_threshold=0.300,
+    )
+
+    assert res["guardrail_active"] is True
+    # Guaranteed strictly less than participant_threshold (0.300)
+    assert res["participant_score"] < 0.300
+    assert res["participant_score"] == pytest.approx(0.300 - 1e-4, abs=1e-6)
+    # Enforces negative diagnosis
+    assert (res["participant_score"] >= 0.300) is False
+
+
+def test_consensus_guardrail_inactive_when_abnormal_recording_exists():
+    """Verify consensus guardrail does NOT activate when at least one recording >= tau_rec."""
+    from src.mil.model import score_production_bag
+
+    class SimpleMIL(torch.nn.Module):
+        def forward(self, h):
+            n = h.shape[0]
+            return {
+                "probability": torch.tensor(0.60),
+                "attention_weights": torch.full((n,), 1.0 / n),
+            }
+
+    mock_model = SimpleMIL()
+    embs = torch.randn(6, 768)
+    # Rec 1 is abnormal (0.315 >= 0.310), Rec 2 is normal (0.200 < 0.310)
+    crop_probs = torch.tensor([0.315, 0.315, 0.315, 0.200, 0.200, 0.200])
+
+    res = score_production_bag(
+        mil_model=mock_model,
+        bag_embeddings=embs,
+        crop_probabilities=crop_probs,
+        num_recordings=2,
+        recording_threshold=0.310,
+        participant_threshold=0.300,
+    )
+
+    assert res["guardrail_active"] is False
+    assert res["participant_score"] == res["blend_p"]
+
+
+def test_scoring_path_parity_between_predictor_and_helper(tmp_path):
+    """Verify PatientPredictor and score_production_bag produce identical scores without divergence."""
+    import soundfile as sf
+    from src.deep_learning.predict_patient import PatientPredictor
+    from src.mil.model import score_production_bag, GatedAttentionMIL
+
+    # Generate two synthetic 3-second audio files
+    f1 = tmp_path / "take1.wav"
+    f2 = tmp_path / "take2.wav"
+    sr = 16000
+    t = np.linspace(0, 3, sr * 3)
+    sf.write(str(f1), (0.5 * np.sin(2 * np.pi * 150 * t)).astype(np.float32), sr)
+    sf.write(str(f2), (0.5 * np.sin(2 * np.pi * 180 * t)).astype(np.float32), sr)
+
+    predictor = PatientPredictor.__new__(PatientPredictor)
+    predictor.device = torch.device("cpu")
+    predictor.sample_rate = sr
+    predictor.duration = 8.0
+    predictor.target_length = int(8.0 * sr)
+    predictor.num_crops = 3
+    predictor.use_attention_mil = True
+    predictor.recording_threshold = 0.310
+    predictor.optimal_threshold = 0.300
+
+    class DeterministicAcoustic(torch.nn.Module):
+        def forward(self, input_values):
+            b = input_values.shape[0]
+            # Deterministic embeddings and probabilities
+            torch.manual_seed(123)
+            embs = torch.randn(b, 768)
+            probs = torch.tensor([[0.72, 0.28]] * b)
+            return {"probabilities": probs, "embeddings": embs}
+
+    torch.manual_seed(42)
+    predictor.model = DeterministicAcoustic()
+    predictor.mil_model = GatedAttentionMIL(768, 128, 128, 0.25)
+    predictor.mil_model.eval()
+
+    # Predict via PatientPredictor
+    pred_res = predictor.predict_patient([f1, f2])
+
+    # Independently extract embs and crop_probs using predictor methods
+    w1 = predictor.load_audio(f1)
+    w2 = predictor.load_audio(f2)
+    _, e1, c1 = predictor.infer_single_recording(w1, return_embeddings=True, return_crop_probs=True)
+    _, e2, c2 = predictor.infer_single_recording(w2, return_embeddings=True, return_crop_probs=True)
+
+    bag_tensor = torch.cat([e1, e2], dim=0)
+    crop_tensor = torch.cat([c1, c2], dim=0)
+
+    score_res = score_production_bag(
+        mil_model=predictor.mil_model,
+        bag_embeddings=bag_tensor,
+        crop_probabilities=crop_tensor,
+        num_recordings=2,
+        recording_threshold=0.310,
+        participant_threshold=0.300,
+        crops_per_rec=3,
+    )
+
+    # Assert exact score parity
+    assert abs(pred_res["raw_participant_score"] - score_res["participant_score"]) < 1e-7
+    assert pred_res["participant_mean_score"] == round(score_res["participant_score"], 4)
+    assert pred_res["mil_probability"] == round(score_res["mil_prob"], 4)
+
+    # Assert per-recording details parity
+    assert len(pred_res["recordings_detail"]) == 2
+    for idx, rec_detail in enumerate(pred_res["recordings_detail"]):
+        assert rec_detail["probability_PD"] == round(score_res["rec_probs"][idx], 4)
+        assert rec_detail["attention_weight"] == round(score_res["rec_weights"][idx], 4)
+
+
