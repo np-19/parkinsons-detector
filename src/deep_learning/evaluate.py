@@ -75,6 +75,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-test-samples", type=int, default=None, help="Cap test samples (optional for sanity check)")
     parser.add_argument("--device", type=str, default=None, help="Device ('cuda', 'cpu')")
     parser.add_argument("--fp16", action="store_true", default=True, help="Use FP16 mixed precision")
+    parser.add_argument("--mil-path", type=str, default=None, help="Path to mil_head.pt checkpoint")
+    parser.add_argument("--bags-path", type=str, default="artifacts/mil/bags_test.pt", help="Path to pre-extracted participant bags")
+    parser.add_argument("--eval-bags", action="store_true", default=False, help="Fast evaluation on pre-extracted participant bags (seconds instead of 1 hour)")
     parser.add_argument("--run-meta-classifier", action="store_true", default=False, help="Run exploratory meta-classifier (Note: confounded by recording counts)")
     return parser.parse_args()
 
@@ -119,7 +122,146 @@ def main() -> None:
     model.to(device)
     model.eval()
 
-    # Dataset
+    # Load Gated Attention-MIL head if available
+    mil_path = Path(args.mil_path) if args.mil_path else (model_dir / "mil_head.pt")
+    if not mil_path.exists():
+        for candidate in [
+            Path("artifacts/models/deep_learning/wavelm_v4/mil_head.pt"),
+            Path("artifacts/mil/mil_head.pt"),
+        ]:
+            if candidate.exists():
+                mil_path = candidate
+                break
+
+    mil_model = None
+    mil_threshold = 0.390
+    if mil_path and mil_path.exists():
+        try:
+            from src.mil.model import GatedAttentionMIL
+            mil_ckpt = torch.load(mil_path, map_location=device, weights_only=False)
+            mil_model = GatedAttentionMIL(**mil_ckpt["config"])
+            mil_model.load_state_dict(mil_ckpt["model_state_dict"])
+            mil_model.to(device).eval()
+            mil_threshold = float(mil_ckpt.get("optimal_threshold", 0.390))
+            print(f">>> [ATTENTION-MIL] Gated Attention Head Loaded: {mil_path}")
+            print(f"    - Calibrated Operating Threshold: {mil_threshold:.3f}")
+        except Exception as e:
+            print(f"[WARNING] Failed to load Attention-MIL head ({e}); falling back to arithmetic mean.")
+
+    # Check for pre-extracted test bags fallback if requested or if local audio files are partial
+    bags_path = Path(args.bags_path)
+    use_bags = bool(args.eval_bags and bags_path.exists())
+    if not use_bags and bags_path.exists():
+        try:
+            failures_file = Path("data/metadata/processed_audio_failures.csv")
+            test_ds = MPowerAudioDataset(
+                metadata_file=args.test_metadata,
+                audio_root=args.audio_root,
+                target_duration=args.duration,
+                is_training=False,
+                augment=False,
+                failures_file=failures_file if failures_file.exists() else None,
+                max_samples=args.max_test_samples,
+            )
+            if len(test_ds) < 100:
+                use_bags = True
+        except Exception:
+            use_bags = True
+
+    if use_bags:
+        print(f"\n[INFO] Fast evaluation mode using pre-extracted participant bags: {bags_path}")
+        bags = torch.load(bags_path, map_location=device, weights_only=False)
+        print(f"Loaded {len(bags)} held-out test participant bags.")
+
+        p_true = []
+        p_prob_base = []
+        p_prob_mil = []
+        all_health_codes = []
+
+        with torch.no_grad():
+            for hc, b in bags.items():
+                p_true.append(int(b["label"]))
+                all_health_codes.append(hc)
+                p_prob_base.append(float(b["crop_probabilities"].mean().item()))
+                if mil_model is not None:
+                    out = mil_model(b["embeddings"].to(device))
+                    p_prob_mil.append(float(out["probability"].item()))
+
+        p_true = np.array(p_true, dtype=int)
+        p_prob_base = np.array(p_prob_base, dtype=float)
+        part_metrics_opt = compute_metrics(p_true, p_prob_base, threshold=optimal_threshold)
+        part_metrics_default = compute_metrics(p_true, p_prob_base, threshold=0.50)
+
+        part_metrics_mil = None
+        if mil_model is not None:
+            p_prob_mil = np.array(p_prob_mil, dtype=float)
+            part_metrics_mil = compute_metrics(p_true, p_prob_mil, threshold=mil_threshold)
+
+        print("\n" + "=" * 65)
+        print("           HELD-OUT TEST SPLIT EVALUATION RESULTS")
+        print("=" * 65)
+        print(f"Optimal Threshold (selected on val): {optimal_threshold:.3f}\n")
+        print("--- 1. Primary Baseline: Participant Mean (Arithmetic Mean) ---")
+        print(f"  Participants Evaluated:   {len(p_true)}")
+        print(f"  Balanced Accuracy:        {part_metrics_opt['balanced_accuracy'] * 100:.2f}%")
+        print(f"  Accuracy:                 {part_metrics_opt['accuracy'] * 100:.2f}%")
+        print(f"  Sensitivity (PD Recall):  {part_metrics_opt['sensitivity'] * 100:.2f}% ({part_metrics_opt['confusion_matrix']['tp']}/{part_metrics_opt['confusion_matrix']['tp'] + part_metrics_opt['confusion_matrix']['fn']})")
+        print(f"  Specificity (Ctrl Rec):   {part_metrics_opt['specificity'] * 100:.2f}% ({part_metrics_opt['confusion_matrix']['tn']}/{part_metrics_opt['confusion_matrix']['tn'] + part_metrics_opt['confusion_matrix']['fp']})")
+        print(f"  F1 Score:                 {part_metrics_opt['f1']:.4f}")
+        print(f"  ROC-AUC:                  {part_metrics_opt['roc_auc']:.4f}")
+        print(f"  Confusion Matrix:         TN={part_metrics_opt['confusion_matrix']['tn']}, FP={part_metrics_opt['confusion_matrix']['fp']}, "
+              f"FN={part_metrics_opt['confusion_matrix']['fn']}, TP={part_metrics_opt['confusion_matrix']['tp']}")
+
+        if part_metrics_mil is not None:
+            delta_bal = (part_metrics_mil['balanced_accuracy'] - part_metrics_opt['balanced_accuracy']) * 100
+            print(f"\n--- 2. Production: Gated Attention-MIL Aggregation ---")
+            print(f"  Operating Threshold:      {mil_threshold:.3f}")
+            print(f"  Balanced Accuracy:        {part_metrics_mil['balanced_accuracy'] * 100:.2f}% (Delta: {delta_bal:+.2f}%)")
+            print(f"  Accuracy:                 {part_metrics_mil['accuracy'] * 100:.2f}%")
+            print(f"  Sensitivity (PD Recall):  {part_metrics_mil['sensitivity'] * 100:.2f}% ({part_metrics_mil['confusion_matrix']['tp']}/{part_metrics_mil['confusion_matrix']['tp'] + part_metrics_mil['confusion_matrix']['fn']})")
+            print(f"  Specificity (Ctrl Rec):   {part_metrics_mil['specificity'] * 100:.2f}% ({part_metrics_mil['confusion_matrix']['tn']}/{part_metrics_mil['confusion_matrix']['tn'] + part_metrics_mil['confusion_matrix']['fp']})")
+            print(f"  F1 Score:                 {part_metrics_mil['f1']:.4f}")
+            print(f"  ROC-AUC:                  {part_metrics_mil['roc_auc']:.4f}")
+            print(f"  Confusion Matrix:         TN={part_metrics_mil['confusion_matrix']['tn']}, FP={part_metrics_mil['confusion_matrix']['fp']}, "
+                  f"FN={part_metrics_mil['confusion_matrix']['fn']}, TP={part_metrics_mil['confusion_matrix']['tp']}")
+
+        print("=" * 65)
+
+        # Save reports
+        report = {
+            "model_dir": str(model_dir),
+            "best_epoch": best_epoch,
+            "optimal_threshold": optimal_threshold,
+            "participant_level": {
+                "optimal_threshold_metrics": part_metrics_opt,
+                "default_threshold_metrics": part_metrics_default,
+                "total_participants": len(p_true),
+            },
+        }
+        if part_metrics_mil is not None:
+            report["gated_attention_mil"] = {
+                "threshold": mil_threshold,
+                "metrics": part_metrics_mil,
+            }
+
+        report_path = model_dir / "test_evaluation_report.json"
+        with open(report_path, "w") as f:
+            json.dump(report, f, indent=2)
+
+        pred_df = pd.DataFrame({
+            "healthCode": all_health_codes,
+            "label": p_true,
+            "prob_PD_baseline": p_prob_base,
+            "prob_PD_mil": p_prob_mil if mil_model is not None else p_prob_base,
+        })
+        predictions_path = model_dir / "test_predictions.csv"
+        pred_df.to_csv(predictions_path, index=False)
+
+        print(f"\nEvaluation report written to {report_path}")
+        print(f"Detailed predictions written to {predictions_path}\n")
+        return
+
+    # Standard Dataset path when all raw audio files are present locally
     failures_file = Path("data/metadata/processed_audio_failures.csv")
     test_ds = MPowerAudioDataset(
         metadata_file=args.test_metadata,

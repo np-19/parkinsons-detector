@@ -30,7 +30,19 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
     exit 0
 fi
 
+# Parse optional --fast flag or positional args
+EXTRA_ARGS=()
+for arg in "$@"; do
+    if [ "${arg}" = "--fast" ] || [ "${arg}" = "fast" ]; then
+        EXTRA_ARGS+=("--eval-bags")
+    fi
+done
+
 MODEL_DIR="${1:-artifacts/models/deep_learning/wavelm_v4}"
+# If first arg was fast flag, reset MODEL_DIR to default
+if [ "${MODEL_DIR}" = "--fast" ] || [ "${MODEL_DIR}" = "fast" ]; then
+    MODEL_DIR="artifacts/models/deep_learning/wavelm_v4"
+fi
 NUM_CROPS="${2:-5}"
 DURATION="${3:-8.0}"
 BATCH_SIZE="${4:-4}"
@@ -63,4 +75,5 @@ exec "${PYTHON_EXEC}" -m src.deep_learning.evaluate \
   --duration "${DURATION}" \
   --num-crops "${NUM_CROPS}" \
   --batch-size "${BATCH_SIZE}" \
-  --device "${DEVICE}"
+  --device "${DEVICE}" \
+  ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
