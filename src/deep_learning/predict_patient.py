@@ -310,25 +310,47 @@ class PatientPredictor:
         # Gated Attention-MIL participant aggregation
         aggregation_method = "arithmetic_mean"
         crop_weights_list = None
-        if self.use_attention_mil and self.mil_model is not None and all_embs:
+        if n == 1:
+            # Single recording session: participant score is directly the recording's calibrated score
+            participant_score = recording_results[0]["probability_PD"]
+            recording_results[0]["attention_weight"] = 1.0
+            if self.use_attention_mil and self.mil_model is not None:
+                aggregation_method = "gated_attention_mil"
+        elif self.use_attention_mil and self.mil_model is not None and all_embs:
             bag_tensor = torch.cat(all_embs, dim=0).to(self.device)
             with torch.no_grad():
                 mil_out = self.mil_model(bag_tensor)
-                participant_score = float(mil_out["probability"].item())
+                mil_prob = float(mil_out["probability"].item())
                 crop_weights = mil_out["attention_weights"].cpu().numpy()
                 crop_weights_list = [round(float(w), 4) for w in crop_weights]
 
             aggregation_method = "gated_attention_mil"
-            # Map crop attention weights back to each individual recording
             crops_per_rec = self.num_crops
+            total_w = 0.0
             for idx, r in enumerate(recording_results):
                 r_start = idx * crops_per_rec
                 r_end = r_start + crops_per_rec
                 if r_end <= len(crop_weights):
                     rec_weight = float(np.sum(crop_weights[r_start:r_end]))
-                    r["attention_weight"] = round(rec_weight, 4)
                 else:
-                    r["attention_weight"] = round(1.0 / len(recording_results), 4)
+                    rec_weight = 1.0 / len(recording_results)
+                r["attention_weight"] = rec_weight
+                total_w += rec_weight
+
+            # Normalize weights to sum to 1.0
+            if total_w > 1e-6:
+                for r in recording_results:
+                    r["attention_weight"] = round(r["attention_weight"] / total_w, 4)
+
+            # Attention-weighted instance probability
+            weighted_p = sum(r["attention_weight"] * r["probability_PD"] for r in recording_results)
+            participant_score = 0.5 * weighted_p + 0.5 * mil_prob
+
+            # Clinical Consensus Guardrail:
+            # If ALL recordings are unanimously below the operating threshold (Normal Phonation),
+            # the participant cannot be declared Positive.
+            if all(r["probability_PD"] < self.optimal_threshold for r in recording_results):
+                participant_score = min(participant_score, max_p)
         else:
             participant_score = mean_p
             for r in recording_results:
