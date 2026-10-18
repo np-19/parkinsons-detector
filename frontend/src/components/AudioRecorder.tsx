@@ -11,8 +11,9 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplet
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [recordedFile, setRecordedFile] = useState<File | null>(null);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordedSamplesRef = useRef<Float32Array[]>([]);
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const timerRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -23,13 +24,32 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplet
 
   useEffect(() => {
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
-        audioContextRef.current.close();
-      }
+      cleanupAudio();
     };
   }, []);
+
+  const cleanupAudio = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (scriptProcessorRef.current) {
+      scriptProcessorRef.current.disconnect();
+      scriptProcessorRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+  };
 
   const drawVisualizer = () => {
     if (!analyserRef.current || !canvasRef.current) return;
@@ -74,67 +94,113 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplet
     render();
   };
 
+  const encodeWAV = (samples: Float32Array, sampleRate: number): Blob => {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    const writeString = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+
+    /* RIFF identifier */
+    writeString(0, "RIFF");
+    /* file length */
+    view.setUint32(4, 36 + samples.length * 2, true);
+    /* RIFF type */
+    writeString(8, "WAVE");
+    /* format chunk identifier */
+    writeString(12, "fmt ");
+    /* format chunk length */
+    view.setUint32(16, 16, true);
+    /* sample format (raw PCM) */
+    view.setUint16(20, 1, true);
+    /* channel count (1 = mono) */
+    view.setUint16(22, 1, true);
+    /* sample rate */
+    view.setUint32(24, sampleRate, true);
+    /* byte rate (sampleRate * 1 channel * 2 bytes/sample) */
+    view.setUint32(28, sampleRate * 2, true);
+    /* block align (1 channel * 2 bytes) */
+    view.setUint16(32, 2, true);
+    /* bits per sample (16 bit) */
+    view.setUint16(34, 16, true);
+    /* data chunk identifier */
+    writeString(36, "data");
+    /* data chunk length */
+    view.setUint32(40, samples.length * 2, true);
+
+    // Write 16-bit PCM samples with clipping prevention
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+
+    return new Blob([buffer], { type: "audio/wav" });
+  };
+
   const startRecording = async () => {
     try {
+      cleanupAudio();
       setAudioUrl(null);
       setRecordedFile(null);
-      audioChunksRef.current = [];
+      recordedSamplesRef.current = [];
       setRecordingSeconds(0);
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
-      });
+      // Request microphone access (try without post-processing first, fallback to default)
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          },
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      mediaStreamRef.current = stream;
 
-      // Initialize Web Audio API for visualizer
-      const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      // Initialize Web Audio API
+      const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const audioCtx = new AudioCtxClass();
       audioContextRef.current = audioCtx;
+
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+
+      const source = audioCtx.createMediaStreamSource(stream);
+
+      // Visualizer node
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 2048;
       analyserRef.current = analyser;
-      const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyser);
-
       drawVisualizer();
 
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/ogg;codecs=opus";
+      // PCM Audio Capture Node (mono, 4096 buffer)
+      const scriptNode = audioCtx.createScriptProcessor(4096, 1, 1);
+      scriptProcessorRef.current = scriptNode;
 
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+      scriptNode.onaudioprocess = (event) => {
+        const inputData = event.inputBuffer.getChannelData(0);
+        recordedSamplesRef.current.push(new Float32Array(inputData));
       };
 
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        const ext = mimeType.includes("ogg") ? "ogg" : "webm";
-        const file = new File([audioBlob], `phonation_take_${Date.now()}.${ext}`, { type: mimeType });
-        const url = URL.createObjectURL(audioBlob);
+      source.connect(scriptNode);
+      scriptNode.connect(audioCtx.destination);
 
-        setAudioUrl(url);
-        setRecordedFile(file);
-
-        // Stop all audio tracks
-        stream.getTracks().forEach((track) => track.stop());
-        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      };
-
-      mediaRecorder.start(100);
       setIsRecording(true);
 
       const startTime = Date.now();
       timerRef.current = window.setInterval(() => {
         const elapsed = (Date.now() - startTime) / 1000;
         setRecordingSeconds(elapsed);
-        if (elapsed >= 12.0) {
+        if (elapsed >= 10.0) {
           stopRecording();
         }
       }, 100);
@@ -145,10 +211,46 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplet
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
+    if (!isRecording && !timerRef.current) return;
+    setIsRecording(false);
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (scriptProcessorRef.current) {
+      scriptProcessorRef.current.disconnect();
+      scriptProcessorRef.current = null;
+    }
+
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+
+    // Process recorded samples into standard WAV
+    const chunks = recordedSamplesRef.current;
+    if (chunks.length > 0 && audioContextRef.current) {
+      const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+      const allSamples = new Float32Array(totalLen);
+      let offset = 0;
+      for (const chunk of chunks) {
+        allSamples.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      const sampleRate = audioContextRef.current.sampleRate;
+      const wavBlob = encodeWAV(allSamples, sampleRate);
+      const file = new File([wavBlob], `phonation_take_${Date.now()}.wav`, { type: "audio/wav" });
+      const url = URL.createObjectURL(wavBlob);
+
+      setAudioUrl(url);
+      setRecordedFile(file);
     }
   };
 
