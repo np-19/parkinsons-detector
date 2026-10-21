@@ -1,8 +1,9 @@
 """Patient-level Parkinson's detection inference pipeline.
 
-Takes one or more sustained vowel audio recordings for a patient, runs
-Wav2Vec 2.0 acoustic inference with Test-Time Augmentation (TTA), averages
-the recording probabilities, and outputs a clinical screening triage result.
+Takes one or more sustained vowel audio recordings for a patient, loads the
+fine-tuned WaveLM Base+ checkpoint, extracts three crops per take, and applies
+Gated Attention-MIL pooling with a 50:50 blend and consensus guardrail. Returns
+a participant-level clinical screening triage result.
 """
 
 import argparse

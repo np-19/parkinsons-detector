@@ -4,20 +4,32 @@ All notable changes to the `parkinsons-detector` project are documented in this 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Phase 7] - 2026-10-21 - Documentation Accuracy Pass
+
+### Fixed
+- Corrected the documented backbone configuration to match the shipped checkpoint: **layers 1–2 frozen, layers 3–12 trainable (10 unfrozen)**, 15 epochs (best epoch 14), not 8 unfrozen layers / 20 epochs.
+- Corrected participant-error wording to distinguish gross changes from net changes: **net +7 PD** (8 rescued, 1 degraded) and **net −9 false positives** (12 cleared, 3 new).
+- Corrected dataset counts to separate the 10,000 selected / 9,986 decoded recordings (3,868 / 3,863 participants) from the metadata splits and the 579-participant, 1,480-recording evaluated test cohort.
+- Aligned triage documentation with runtime thresholds: low-risk `<0.20`, borderline `0.20–0.30`, high-risk `≥0.30`; `0.40` is only a confidence marker.
+- Replaced unsupported or stale statistics in the user and defense guides with values recomputed from `artifacts/models/deep_learning/wavelm/test_predictions.csv`.
+- Marked the Phase 4c meta-classifier results as retracted/confounded and annotated historical planning documents.
+
+---
+
 ## [Phase 6] - 2026-10-18 - WaveLM Backbone, Gated Attention-MIL & Clinical Telemetry Figures
 
 ### Added
 - **Champion Single-Model Architecture (`WaveLM Base+` + Gated Attention-MIL)**:
   - Selected fine-tuned `microsoft/wavlm-base-plus` as champion acoustic foundation model, pre-trained with masked speech denoising across 94,000 hours of noisy audio.
   - Implemented `src/mil/model.py`: Gated Attention Multiple Instance Learning head (Ilse et al., ICML 2018) with scale factor $\frac{1}{\sqrt{L}}$ and LayerNorm.
-  - Slices participant takes into multi-crop 8.0-second sliding windows, dynamically downweighting uninformative transient noise and silent air while concentrating attention on sustained phonation plateaus.
+  - Slices each participant take into **3 evenly spaced 8.0-second crops** (not a dense sliding window), dynamically downweighting uninformative transient noise and silent air while concentrating attention on sustained phonation plateaus.
   - Exported trained weights to `artifacts/mil/mil_head.pt` and `artifacts/models/deep_learning/wavelm/mil_head.pt`.
 - **Grounded Benchmark Metrics (Held-Out Test Set, 579 Participants)**:
   - **Balanced Accuracy**: Elevated from 79.11% (arithmetic mean) to **`82.54%` [95% CI: 79.0%, 86.1%]** (+3.44% gain, $\tau = 0.300$, $\tau_{\text{rec}} = 0.310$).
-  - **PD Sensitivity**: Increased from 78.77% to **`83.56%`** (catching 122 of 146 clinical PD patients, rescuing 7 previously missed cases).
-  - **Healthy Control Specificity**: Increased from 79.45% to **`81.52%`** (clearing 9 false alarms, reducing FP from 89 down to 80).
+  - **PD Sensitivity**: Increased from 78.77% to **`83.56%`** (122 of 146 PD participants; **net +7**, comprising 8 rescued and 1 degraded).
+  - **Healthy Control Specificity**: Increased from 79.45% to **`81.52%`** (**net −9 false positives**, comprising 12 controls cleared and 3 new false positives; FP 89 → 80).
   - **Held-Out Test ROC-AUC**: **`0.8791` [95% CI: 0.845, 0.912]**.
-  - **Clean Training Protocol**: Trained strictly on 2,705 training participant bags (`bags_train.pt`) with zero test leakage; participant threshold calibrated exclusively on validation bags ($\tau = 0.300$) and recording threshold calibrated on validation takes ($\tau_{\text{rec}} = 0.310$).
+  - **Clean Training Protocol**: Trained strictly on 2,705 training participant bags (`bags_train.pt`) with zero test leakage. Operating thresholds were fixed at $\tau = 0.300$ and $\tau_{\text{rec}} = 0.310$ from validation analysis and hard-coded in `scripts/train_mil_clean.py`; the held-out test set was scored once.
 - **High-Resolution Evaluation Figures (`docs/figures/`)**:
   - `roc_curves.png`: High-resolution ROC curves for Baseline (AUC = 0.8585) vs. Attention-MIL (AUC = 0.8791).
   - `confusion_matrices.png`: Side-by-side confusion matrices for Baseline vs. Attention-MIL (N=579) with clear actual condition and model prediction labels.
@@ -31,9 +43,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 - **Count-Invariant Inference & Held-Out Test Evaluation**:
-  - Achieved **74.72% Balanced Accuracy** (**0.8245 ROC-AUC**, 78.08% Sensitivity, 71.36% Specificity) on 579 held-out test participants under count-invariant aggregation.
-  - Achieved **81.83% Balanced Accuracy** (**0.8985 ROC-AUC**, 86.99% Sensitivity, 76.67% Specificity) under Top-2 aggregation.
-  - Retained the 10-moment distribution meta-classifier (**90.86% Balanced Accuracy**, **0.9346 ROC-AUC**) as an exploratory ablation study documenting the mPower recording adherence confounder.
+  - Achieved **74.72% Balanced Accuracy** (**0.8245 ROC-AUC**, 78.08% Sensitivity, 71.36% Specificity) on 579 held-out test participants with the **Wav2Vec 2.0 baseline** under count-invariant aggregation.
+  - Achieved **81.83% Balanced Accuracy** (**0.8985 ROC-AUC**, 86.99% Sensitivity, 76.67% Specificity) under Top-2 aggregation for that baseline.
+  - Retained the 10-moment distribution meta-classifier (**90.86% Balanced Accuracy**, **0.9346 ROC-AUC**) as an exploratory ablation. **This result is retracted as a performance claim:** the features leak recording-count/adherence information (see ADR-010).
 - **Documentation**:
   - Documented acoustic impact of spectral noise reduction vs. raw audio preservation on early dysphonia detection.
   - Validated superiority of the standard sustained `/a/` open-vowel protocol over constricted front vowels like `/i/`.
@@ -46,7 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Docker-First Containerization**:
   - `Dockerfile` based on `pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime` for environment isolation from host Python 3.14.
   - `docker-compose.yml` defining `local-train` (4GB VRAM optimization for GTX 1650), `cloud-train` (high-throughput for GridShare / RunPod), and `evaluate` services.
-  - Shell launchers `scripts/run_local.sh` and `scripts/run_cloud.sh`.
+  - Shell launchers: the originally documented `scripts/run_local.sh` / `scripts/run_cloud.sh` names do not exist in the current tree; current equivalents are `scripts/run_docker.sh`, `scripts/run_docker_evaluate.sh`, and `scripts/train_wavelm_cloud.sh`.
 - **End-to-End Speech Fine-Tuning Architecture**:
   - `src/deep_learning/dataset.py`: PyTorch dataset loading 16 kHz mono WAVs dynamically, applying padding/truncation to 5 seconds, and SpecAugment masking.
   - `src/deep_learning/model.py`: `Wav2Vec2ForParkinsons` neural network with frozen CNN encoder, frozen lower Transformer layers (1–6), unfrozen upper Transformer layers (7–12), learnable temporal attention pooling, and classification head.
@@ -61,16 +73,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Phase 4c] - 2026-10-15 - Clinical Meta-Classifier & Peak Benchmark Results
 
+> **Retraction (2026-10-16, ADR-010):** The results in this section are confounded by participant recording-count/adherence. `count`, `max`, `min`, and `std` features encode how often the app was used, not just voice quality. They are retained here as historical exploratory results and must **not** be cited as validated diagnostic performance.
+
 ### Added
 - **Participant-Level Distribution Analysis**:
   - Statistical aggregation engine over recording distributions (mean, max, min, top-2, std dev, count).
-  - Effectively resolves the clinical "ON-medication" dilution phenomenon where medication-alleviated recordings falsely suppress disease probability.
-- **Official Test Benchmark Results**:
-  - **Cross-Validated ROC-AUC**: **0.9338** (surpasses all published mPower benchmarks).
-  - **Participant Balanced Accuracy**: **91.20%** (exceeds the >85% target).
+  - Initially interpreted as resolving the clinical "ON-medication" dilution phenomenon; later audit showed the gain was driven by the recording-count confounder.
+- **Exploratory (confounded) Test Results**:
+  - **ROC-AUC**: **0.9338** (not a clean benchmark; do not compare with published mPower results).
+  - **Participant Balanced Accuracy**: **91.20%**.
   - **Participant Raw Accuracy**: **94.99%**.
-  - **Sensitivity (PD Recall)**: **83.56%** (122 / 146 true PD patients identified).
-  - **Specificity (Healthy Control)**: **98.85%** (428 / 433 healthy controls correctly classified, only 5 false positives).
+  - **Sensitivity (PD Recall)**: **83.56%** (122 / 146).
+  - **Specificity (Healthy Control)**: **98.85%** (428 / 433).
   - **F1 Score**: **0.8938**.
 
 ---
@@ -79,10 +93,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 - **Multi-Crop Test-Time Augmentation (TTA)**:
-  - Added `--num-crops` and `--crop-stride` in `src/deep_learning/evaluate.py`. Uniformly samples overlapping audio crops and averages predictions per recording to stabilize test inference.
+  - Added `--num-crops` and `--crop-stride` in `src/deep_learning/evaluate.py`. Samples evenly spaced crops and averages predictions per recording to stabilize test inference (production uses 3 crops).
 - **Enhanced Augmentation & Regularization**:
   - Waveform speed perturbation (0.9x–1.1x), multi-time masking (1–3 masks), wider gain scaling (0.7–1.3), and SNR noise injection (12–30 dB) in `dataset.py`.
-  - Added Mixup augmentation (`--mixup-alpha 0.2`), higher dropout (0.3), label smoothing (0.1), and unfreezing of 8 transformer layers in `model.py` and `train.py`.
+  - Added Mixup augmentation (`--mixup-alpha 0.2`), higher dropout (0.3), label smoothing (0.1), and unfreezing of 8 transformer layers in `model.py` and `train.py` (the final shipped WaveLM checkpoint used 2 frozen / 10 unfrozen layers; see Phase 6 and ADR-009).
   - Created cloud execution scripts for one-command execution on cloud GPUs.
 
 ---

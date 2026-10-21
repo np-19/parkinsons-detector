@@ -33,13 +33,9 @@ def generate_mil_summary_report(
     elif "participant_level" in rep:
         base = rep["participant_level"]["optimal_threshold_metrics"]
         base["threshold"] = rep.get("optimal_threshold", 0.310)
-        base.setdefault("balanced_accuracy_ci", [0.75, 0.83])
-        base.setdefault("roc_auc_ci", [0.82, 0.89])
         mil_sec = rep.get("gated_attention_mil", {})
         mil = mil_sec.get("metrics", base)
         mil["threshold"] = mil_sec.get("threshold", 0.300)
-        mil.setdefault("balanced_accuracy_ci", [0.78, 0.85])
-        mil.setdefault("roc_auc_ci", [0.84, 0.91])
         diff = {
             "balanced_accuracy_diff": mil["balanced_accuracy"] - base["balanced_accuracy"],
             "roc_auc_diff": mil["roc_auc"] - base["roc_auc"],
@@ -57,8 +53,6 @@ def generate_mil_summary_report(
                 w_rep = json.load(f_w)
             base = w_rep.get("participant_level", {}).get("optimal_threshold_metrics", {})
             base["threshold"] = w_rep.get("optimal_threshold", 0.310)
-            base.setdefault("balanced_accuracy_ci", [0.75, 0.83])
-            base.setdefault("roc_auc_ci", [0.82, 0.89])
         else:
             base = dict(test_m)
             base["threshold"] = rep.get("recording_threshold", 0.310)
@@ -103,12 +97,35 @@ def generate_mil_summary_report(
     mean_peak_attn = float(np.mean(max_attns)) if max_attns else 0.0
     mean_std_attn = float(np.mean(stds_attns)) if stds_attns else 0.0
 
+    instance_counts = [len(weights) for weights in attn_dict.values()]
+    mean_instances = float(np.mean(instance_counts)) if instance_counts else 0.0
+    uniform_baseline = (
+        100.0 * float(np.mean([1.0 / count for count in instance_counts if count > 0]))
+        if instance_counts
+        else 0.0
+    )
+
+    n_participants = len(df_preds)
+    n_pd = int((df_preds["label"] == 1).sum())
+    n_ctrl = int((df_preds["label"] == 0).sum())
+
+    def pct_ci(metrics, key):
+        ci = metrics.get(key)
+        if not ci:
+            return "(CI not reported)"
+        return f"[{ci[0] * 100:.1f}%, {ci[1] * 100:.1f}%]"
+
+    def auc_ci(metrics, key):
+        ci = metrics.get(key)
+        if not ci:
+            return "(CI not reported)"
+        return f"[{ci[0]:.3f}, {ci[1]:.3f}]"
+
     md = fr"""# Gated Attention Multiple Instance Learning (Attention-MIL) Evaluation Report
 
-**Branch:** `feature/attention-mil-pooling` (Local, unpushed)  
-**Execution Hardware:** NVIDIA GeForce GTX 1650 (CUDA)  
-**Evaluation Population:** 579 Held-Out Participants (146 PD, 433 Control, 1,480 total audio recordings)  
-**Cross-Validation:** 5-Fold Stratified Participant Cross-Validation (Zero test leakage)  
+**Execution Hardware:** NVIDIA GeForce GTX 1650 (CUDA)<br>
+**Evaluation Population:** {n_participants} Held-Out Participants ({n_pd} PD, {n_ctrl} Control, 1,480 total audio recordings)<br>
+**Protocol:** Single train → validation → one-shot held-out test (zero test leakage). The separate 5-fold OOF ablation is not the source of these test metrics.<br>
 
 ---
 
@@ -116,8 +133,8 @@ def generate_mil_summary_report(
 
 | Metric | WaveLM Baseline (Arithmetic Mean) | Gated Attention-MIL (Adaptive Pooling) | Absolute Change ($\Delta$) |
 | :--- | :---: | :---: | :---: |
-| **Balanced Accuracy** | **{base['balanced_accuracy']*100:.2f}%** [{base['balanced_accuracy_ci'][0]*100:.1f}%, {base['balanced_accuracy_ci'][1]*100:.1f}%] | **{mil['balanced_accuracy']*100:.2f}%** [{mil['balanced_accuracy_ci'][0]*100:.1f}%, {mil['balanced_accuracy_ci'][1]*100:.1f}%] | **{diff['balanced_accuracy_diff']*100:+.2f}%** |
-| **ROC-AUC** | **{base['roc_auc']:.4f}** [{base['roc_auc_ci'][0]:.3f}, {base['roc_auc_ci'][1]:.3f}] | **{mil['roc_auc']:.4f}** [{mil['roc_auc_ci'][0]:.3f}, {mil['roc_auc_ci'][1]:.3f}] | **{diff['roc_auc_diff']:+.4f}** |
+| **Balanced Accuracy** | **{base['balanced_accuracy']*100:.2f}%** {pct_ci(base, 'balanced_accuracy_ci')} | **{mil['balanced_accuracy']*100:.2f}%** {pct_ci(mil, 'balanced_accuracy_ci')} | **{diff['balanced_accuracy_diff']*100:+.2f}%** |
+| **ROC-AUC** | **{base['roc_auc']:.4f}** {auc_ci(base, 'roc_auc_ci')} | **{mil['roc_auc']:.4f}** {auc_ci(mil, 'roc_auc_ci')} | **{diff['roc_auc_diff']:+.4f}** |
 | **Sensitivity (PD Recall)** | **{base['sensitivity']*100:.2f}%** ({base['confusion_matrix']['tp']}/{base['confusion_matrix']['tp'] + base['confusion_matrix']['fn']}) | **{mil['sensitivity']*100:.2f}%** ({mil['confusion_matrix']['tp']}/{mil['confusion_matrix']['tp'] + mil['confusion_matrix']['fn']}) | **{diff['sensitivity_diff']*100:+.2f}%** |
 | **Specificity (Control Recall)**| **{base['specificity']*100:.2f}%** ({base['confusion_matrix']['tn']}/{base['confusion_matrix']['tn'] + base['confusion_matrix']['fp']}) | **{mil['specificity']*100:.2f}%** ({mil['confusion_matrix']['tn']}/{mil['confusion_matrix']['tn'] + mil['confusion_matrix']['fp']}) | **{diff['specificity_diff']*100:+.2f}%** |
 | **Operating Threshold** | **{base['threshold']:.3f}** | **{mil['threshold']:.3f}** | - |
@@ -128,15 +145,17 @@ def generate_mil_summary_report(
 ## 2. Participant-Level Error Breakdown
 
 - **Rescued PD Cases**: **{len(rescued_pd)} participants** previously missed by arithmetic mean were successfully detected by Attention-MIL.
-- **Degraded PD Cases**: **{len(lost_pd)} participants**.
+- **Degraded PD Cases**: **{len(lost_pd)} participant{'s' if len(lost_pd) != 1 else ''}**.
+- **Net PD Change**: **{len(rescued_pd) - len(lost_pd):+d} participants** (TP {base['confusion_matrix']['tp']} → {mil['confusion_matrix']['tp']}).
 - **Cleared False Positives**: **{len(cleared_fp)} healthy participants** falsely alerted by arithmetic mean were cleared by Attention-MIL.
 - **New False Positives**: **{len(new_fp)} participants**.
+- **Net False-Positive Change**: **{len(new_fp) - len(cleared_fp):+d} participants** (FP {base['confusion_matrix']['fp']} → {mil['confusion_matrix']['fp']}).
 
 ---
 
 ## 3. Attention Weight Dynamics & Interpretability
 
-- **Average Peak Attention Weight**: **{mean_peak_attn*100:.1f}%** per bag (Uniform baseline: ~{100.0/6.0:.1f}% for 6 instances).
+- **Average Peak Attention Weight**: **{mean_peak_attn*100:.1f}%** per bag (mean bag size: {mean_instances:.1f} instances; uniform baseline: ~{uniform_baseline:.1f}%).
 - **Average Attention Std Dev**: **{mean_std_attn:.3f}**.
 - **Clinical Implication**: The gated attention network selectively concentrates probability mass on specific dysphonic time windows rather than diluting confidence across clean phonation segments.
 """

@@ -25,7 +25,7 @@ Evaluated on **579 unseen test participants** (146 Parkinson's, 433 Healthy Cont
 * **Parkinson's Detection Sensitivity**: **`83.56%`** (122 / 146 PD participants correctly detected)
 * **Healthy Control Specificity**: **`81.52%`** (353 / 433 healthy controls correctly cleared)
 * **Test ROC-AUC**: **`0.8791`** (95% CI: `[0.845, 0.912]`)
-* **Single Model Efficiency**: Fine-tuned WaveLM Base+ (90M parameters, frozen during MIL inference); runs in **<1 second** per recording on an NVIDIA GTX 1650.
+* **Single Model Efficiency**: Fine-tuned WaveLM Base+ (~90M backbone parameters, frozen during MIL inference). Informal timing on the local GTX 1650 was roughly 1–2 s per recording; the repository does not include a formal latency benchmark.
 
 ---
 
@@ -43,14 +43,14 @@ Side-by-side comparison evaluated on the identical held-out test cohort of 579 p
 
 ![Confusion Matrices](docs/figures/confusion_matrices.png)
 
-* **Cleared False Alarms**: Attention-MIL reduced false alarms from 89 down to 80 (clearing 9 healthy individuals falsely flagged by arithmetic averaging).
-* **Rescued True Positives**: Correctly identified 122 of 146 Parkinson's patients (up from 115, catching 7 additional cases missed by standard averaging).
+* **Cleared False Alarms**: Attention-MIL reduced false positives from 89 to 80 (net **−9**: 12 controls cleared, 3 new false positives).
+* **Rescued True Positives**: Correctly identified 122 of 146 Parkinson's patients (up from 115; net **+7**: 8 patients rescued, 1 previously correct patient degraded).
 * **Balanced Accuracy Gain**: Improved test balanced accuracy from **79.11% to 82.54%** (+3.44% gain, $\tau = 0.300$).
 
 ---
 
 ### 3. Prediction Score Distribution
-Distribution of model probabilities for Healthy Controls vs. Parkinson's participants, showing low-risk ($P < 0.20$), retest ($0.20 \le P < 0.50$), and high-risk ($P \ge 0.50$) confidence zones:
+Distribution of model probabilities for Healthy Controls vs. Parkinson's participants, showing the runtime triage zones: low-risk ($P < 0.20$), borderline ($0.20 \le P < 0.30$), and high-risk ($P \ge 0.30$). The separate $P \ge 0.40$ marker only changes the confidence wording; it is not a decision boundary.
 
 ![Prediction Score Distribution](docs/figures/clinical_triage_distribution.png)
 
@@ -71,18 +71,18 @@ Distribution of model probabilities for Healthy Controls vs. Parkinson's partici
                   │
                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Stage 2: Multi-Crop Sliding Window                         │
-│  - Slices 8.0s overlapping crops across sustained phonation │
-│  - Avoids initial onset hesitation / vocal fry              │
+│  Stage 2: Multi-Crop Sampling                               │
+│  - 3 evenly spaced 8.0s crops per recording (128k samples)  │
+│  - Short takes are zero-padded; <1.0s is rejected at predict │
 └─────────────────────────────────────────────────────────────┘
                   │
-                  ▼ Tensor of Crops (N_crops, 128000)
+                  ▼ Tensor of Crops (3, 128000)
 ┌─────────────────────────────────────────────────────────────┐
-│  Stage 3: Fine-Tuned WaveLM Feature Backbone (90M Params)   │
+│  Stage 3: Fine-Tuned WaveLM Feature Backbone (~90M Params)  │
 │  - Microsoft WaveLM Base+ (Pretrained on 94k hrs of speech) │
 │  - 7-Layer CNN Feature Encoder (Frozen)                     │
-│  - Transformer Layers 1–4 (Frozen General Acoustic Phonetics)│
-│  - Transformer Layers 5–12 (Fine-tuned Dysphonia Attention) │
+│  - Shipped checkpoint: Transformer layers 1–2 frozen        │
+│  - Transformer layers 3–12 fine-tuned (10 of 12 trainable)  │
 │  - Temporal Attention Pooling (TAP)                         │
 └─────────────────────────────────────────────────────────────┘
                   │
@@ -90,9 +90,10 @@ Distribution of model probabilities for Healthy Controls vs. Parkinson's partici
 ┌─────────────────────────────────────────────────────────────┐
 │  Stage 4: Gated Attention-MIL Head (mil_head.pt)            │
 │  - Two-branch gating: a_i = w^T (tanh(V h) * sigmoid(U h))  │
-│  - Computes attention weights alpha_i summing to 1.0        │
-│  - Dynamically downweights uninformative transient noise    │
-│  - Operating Decision Threshold: tau = 0.300                │
+│  - Attention weights alpha_i sum to 1.0 (count-invariant)   │
+│  - 50:50 blend with attention-weighted take scores          │
+│  - Consensus guardrail when every take < tau_rec = 0.310    │
+│  - Participant decision threshold: tau = 0.300              │
 └─────────────────────────────────────────────────────────────┘
                   │
                   ▼
@@ -103,16 +104,34 @@ Distribution of model probabilities for Healthy Controls vs. Parkinson's partici
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Runtime decision thresholds
+
+| Quantity | Value | Role |
+| :--- | :---: | :--- |
+| Recording threshold $\tau_{\text{rec}}$ | 0.310 | A take below this is treated as low-evidence; if every take is below it, the participant score is capped below $\tau$ |
+| Participant threshold $\tau$ | 0.300 | `POSITIVE` / `HIGH_RISK` at or above this value |
+| Low-risk cutoff | 0.200 | `P < 0.20` → `LOW_RISK` |
+| Borderline band | 0.20–0.30 | `BORDERLINE`; a quiet re-test is recommended |
+| High-confidence marker | 0.400 | Only changes the confidence label (`High Confidence Positive`); not a triage boundary |
+
+The 50:50 blend and the consensus guardrail are implemented in `src/mil/model.py::score_production_bag` and reused by both the CLI and the API.
+
 ---
 
 ## Dataset & Split Isolation
 
-* **Dataset**: mPower Mobile Parkinson Study (Sage Bionetworks), containing **9,986 audio recordings across 3,868 participants**.
-* **Strict Participant Splitting**:
+* **Dataset**: mPower Mobile Parkinson Study (Sage Bionetworks). **10,000 selected recordings from 3,868 participants**; 9,986 decoded successfully (3,863 participants), with 14 container/codec failures tracked in `data/metadata/processed_audio_failures.csv`.
+* **Strict Participant Splitting** (metadata, before decode failures):
   - **Train**: 2,707 participants (7,006 recordings)
   - **Validation**: 580 participants (1,510 recordings)
-  - **Held-Out Test**: 579 participants (1,480 recordings)
+  - **Held-Out Test**: 581 participants (1,484 recordings)
   - **Zero Leakage**: No participant in the test set appears in training or validation.
+* **Evaluated cohort after excluding failed decodes**:
+  - **Train**: 2,705 participants (6,998 recordings)
+  - **Validation**: 579 participants (1,508 recordings)
+  - **Held-Out Test**: **579 participants (1,480 recordings: 146 PD, 433 controls)**
+
+> The 579/1,480 test figures describe the evaluated cohort; the test metadata CSV contains 581 participants and 1,484 recordings. Both are reported here to avoid conflating pre- and post-preprocessing counts.
 
 ---
 
@@ -129,9 +148,17 @@ cd parkinsons-detector
 python3 -m venv data/.venv
 source data/.venv/bin/activate
 
-# Install dependencies
+# Install core Python dependencies
 pip install -r requirements.txt
+
+# Install API dependencies (FastAPI, Uvicorn, multipart, Pydantic)
+pip install -r backend/requirements.txt
 ```
+
+> **PyTorch is not pinned in the root `requirements.txt`.** Install `torch` and `torchaudio` with a build that matches your CUDA driver (or use the Docker images, which include them). The project was developed against torch 2.14 / CUDA 13.0 locally and the Docker images use `pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime`.
+>
+> **Model weights and audio are not stored in Git.** `best_model.pt` (~944 MB) is excluded by `.gitignore`, and `data/processed_audio/` (about 3.1 GB locally) is not tracked. Place the checkpoint at `artifacts/models/deep_learning/wavelm/best_model.pt` and the dataset under `data/processed_audio/` before running the examples below. Only the small `mil_head.pt` files and evaluation artifacts are tracked.
+
 
 ### 2. Predict a Patient's Voice (CLI)
 
@@ -167,6 +194,8 @@ python3 src/deep_learning/predict_patient.py \
     [2] 100136.wav (10.05s): P(PD) = 0.9692 [Attn: 0.619] -> Dysarthric / Tremor
 =================================================================
 ```
+
+> In the CLI output, `HIGH_RISK` begins at the participant threshold (0.300). The printed `Diagnostic: ≥0.400` is the confidence marker, not the point where high risk starts. See the threshold table above.
 
 For JSON output:
 ```bash

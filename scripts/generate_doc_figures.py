@@ -73,6 +73,11 @@ spec_m = tn_m / (tn_m + fp_m)
 sens_m = tp_m / (tp_m + fn_m)
 bal_m = (sens_m + spec_m) / 2.0
 
+rescued_pd = int(((pred_base == 0) & (pred_mil == 1) & (y_true == 1)).sum())
+degraded_pd = int(((pred_base == 1) & (pred_mil == 0) & (y_true == 1)).sum())
+cleared_fp = int(((pred_base == 1) & (pred_mil == 0) & (y_true == 0)).sum())
+new_fp = int(((pred_base == 0) & (pred_mil == 1) & (y_true == 0)).sum())
+
 ax.scatter([1 - spec_b], [sens_b], color=C_BLUE, s=90, zorder=5, label=f'Baseline Operating Point (tau={tau_base:.3f}, BalAcc={bal_b*100:.1f}%)')
 ax.scatter([1 - spec_m], [sens_m], color=C_RED, s=120, marker='*', zorder=5, label=f'Attention-MIL Operating Point (tau={tau_mil:.3f}, BalAcc={bal_m*100:.1f}%)')
 
@@ -144,7 +149,7 @@ for ax, (cm, main_title, subtitle), labels in zip(axes, cms, labels_list):
             text = f'{val:,}\n\n{cat_name}\n({pct})'
             ax.text(j, i, text, ha='center', va='center', fontsize=11, fontweight='bold', color=color)
 
-fig.text(0.5, 0.01, f'* Both models evaluated on the identical held-out test cohort of 579 participants (433 Healthy, 146 Parkinson\'s).\nAttention-MIL cleared {fp_b - fp_m} false alarms and detected {tp_m - tp_b} additional Parkinson\'s cases without manual tuning.', ha='center', fontsize=9.5, style='italic', color='#444444')
+fig.text(0.5, 0.01, f'* Both models evaluated on the identical held-out test cohort of 579 participants (433 Healthy, 146 Parkinson\'s).\nAttention-MIL net change: {fp_b - fp_m} fewer false positives ({cleared_fp} cleared, {new_fp} new) and {tp_m - tp_b} more true positives ({rescued_pd} rescued, {degraded_pd} degraded).', ha='center', fontsize=9.5, style='italic', color='#444444')
 
 plt.tight_layout(rect=[0, 0.05, 1, 1])
 fig.savefig(OUT_DIR / 'confusion_matrices.png', dpi=300)
@@ -163,14 +168,14 @@ bins = np.linspace(0, 1, 35)
 ax.hist(ctrl_scores, bins=bins, alpha=0.55, color=C_BLUE, label=f'Healthy Controls (N={len(ctrl_scores)})', density=True, edgecolor='black', lw=0.5)
 ax.hist(pd_scores, bins=bins, alpha=0.55, color=C_RED, label=f"Parkinson's Disease (N={len(pd_scores)})", density=True, edgecolor='black', lw=0.5)
 
-# Cutoffs
-ax.axvline(0.20, color=C_GREEN, linestyle='--', lw=2, label='Low-Risk Cutoff (tau = 0.20)')
-ax.axvline(0.50, color='darkred', linestyle='--', lw=2, label='High-Risk Cutoff (tau = 0.50)')
+# Cutoffs (runtime triage: low <0.20, high >=0.30; 0.40 is only a confidence marker)
+ax.axvline(0.20, color=C_GREEN, linestyle='--', lw=2, label='Low-Risk Cutoff (P = 0.20)')
+ax.axvline(0.30, color='darkred', linestyle='--', lw=2, label='High-Risk Threshold (P = 0.30)')
 
-# Shading confidence zones
+# Shading triage zones
 ax.axvspan(0.0, 0.20, color='green', alpha=0.08, label='Low Risk Region')
-ax.axvspan(0.20, 0.50, color='orange', alpha=0.12, label='Borderline / Review Region')
-ax.axvspan(0.50, 1.0, color='red', alpha=0.08, label='High Risk Region')
+ax.axvspan(0.20, 0.30, color='orange', alpha=0.12, label='Borderline / Retest Region')
+ax.axvspan(0.30, 1.0, color='red', alpha=0.08, label='High Risk Region')
 
 ax.set_xlabel('Attention-MIL Predicted Probability P(PD)', fontsize=11, fontweight='bold')
 ax.set_ylabel('Probability Density', fontsize=11, fontweight='bold')

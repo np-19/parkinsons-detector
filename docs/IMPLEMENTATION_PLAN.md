@@ -1,5 +1,7 @@
 # Deep Learning Fine-Tuning & Docker Portability Implementation Plan
 
+> **Status: historical planning document (2026-10-14).** This file records the initial Wav2Vec2 plan, including 5.0-second windows, six frozen Transformer layers, and planned `scripts/run_local.sh` / `scripts/run_cloud.sh` launchers. The shipped implementation differs: **WaveLM Base+**, **8.0-second** audio, **3 evenly spaced crops**, **2 frozen / 10 trainable Transformer layers**, **15 epochs**, and a **Gated Attention-MIL** head. The current script names and final configuration are documented in `README.md`, `DECISIONS.md`, and `CHANGELOG.md`; this plan is retained for design history and should not be used as the current runbook.
+
 This document contains the complete technical blueprint, mathematical justification, and execution plan for fine-tuning pretrained speech representations on the mPower dataset inside a portable Docker container for local GTX 1650 and GridShare cloud GPU environments.
 
 ---

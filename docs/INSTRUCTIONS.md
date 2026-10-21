@@ -1,5 +1,7 @@
 # Project Architecture Directives & Constraints
 
+> **Status note (2026-10-21):** This file records the project's initial directives. The final shipped model uses **WaveLM Base+, 2 frozen / 10 trainable Transformer layers (layers 1–2 frozen, 3–12 trainable), and 8.0-second audio**. The "frozen lower 6 / trainable upper 6" constraint below describes the earlier Wav2Vec2 plan, not the deployed checkpoint. See `README.md` and `DECISIONS.md` (ADR-009/011/012) for the final configuration.
+
 This document records the architectural constraints, hardware budgets, and evaluation guidelines for the voice-based Parkinson's detection project.
 
 ---
@@ -32,8 +34,8 @@ This document records the architectural constraints, hardware budgets, and evalu
 - Mandatory techniques:
   - PyTorch Automatic Mixed Precision (AMP `fp16`).
   - Frozen 7-layer CNN feature extractor.
-  - Frozen lower 6 Transformer encoder layers (layers 1–6).
-  - Trainable upper 6 Transformer encoder layers (layers 7–12) with low learning rate ($2 \times 10^{-5}$).
+  - Initial plan: froze lower 6 Transformer encoder layers (layers 1–6).
+  - Shipped checkpoint: layers 1–2 frozen, layers 3–12 trainable (initial plan: upper 6, layers 7–12) with low learning rate ($2 \times 10^{-5}$).
   - PyTorch Gradient Checkpointing enabled on the Transformer backbone (saves ~60% activation memory).
   - Physical batch size = 4, Gradient Accumulation steps = 8 ($\text{Effective Batch Size} = 32$).
 
