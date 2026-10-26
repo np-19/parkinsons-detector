@@ -6,7 +6,7 @@ from typing import List
 # Base workspace directory (points to root of repository)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Model weights path (WaveLM champion model + Gated Attention-MIL)
+# Model weights path (WavLM champion model + Gated Attention-MIL)
 DEFAULT_WAVELM_PATH = str(BASE_DIR / "artifacts/models/deep_learning/wavelm/best_model.pt")
 DEFAULT_MIL_PATH = str(BASE_DIR / "artifacts/models/deep_learning/wavelm/mil_head.pt")
 

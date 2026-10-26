@@ -1,6 +1,6 @@
 # ==============================================================================
 # Dockerfile for NeuroVocal FastAPI Backend Service
-# Runs GPU-accelerated acoustic inference with PyTorch, Torchaudio & WaveLM + Attention-MIL
+# Runs GPU-accelerated acoustic inference with PyTorch, Torchaudio & WavLM + Attention-MIL
 # ==============================================================================
 
 FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime

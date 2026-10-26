@@ -57,8 +57,8 @@ fpr_mil, tpr_mil, _ = roc_curve(y_true, y_prob_mil)
 auc_base = auc(fpr_base, tpr_base)
 auc_mil = auc(fpr_mil, tpr_mil)
 
-ax.plot(fpr_base, tpr_base, label=f'WaveLM Baseline (AUC = {auc_base:.4f})', color=C_BLUE, lw=2, linestyle='--')
-ax.plot(fpr_mil, tpr_mil, label=f'WaveLM + Gated Attention-MIL (AUC = {auc_mil:.4f})', color=C_RED, lw=2.5)
+ax.plot(fpr_base, tpr_base, label=f'WavLM Baseline (AUC = {auc_base:.4f})', color=C_BLUE, lw=2, linestyle='--')
+ax.plot(fpr_mil, tpr_mil, label=f'WavLM + Gated Attention-MIL (AUC = {auc_mil:.4f})', color=C_RED, lw=2.5)
 
 # Operating points
 cm_b = confusion_matrix(y_true, pred_base, labels=[0, 1])
@@ -103,12 +103,12 @@ cms = [
     (
         cm_b,
         'Baseline: Standard Arithmetic Averaging',
-        f'Balanced Accuracy: {bal_b*100:.2f}% | Sensitivity: {sens_b*100:.2f}% | Specificity: {spec_b*100:.2f}%\nOperating Threshold: tau = {tau_base:.3f} | N = 579 Test Participants'
+        f'Balanced Accuracy: {bal_b*100:.2f}%\nSensitivity: {sens_b*100:.2f}% | Specificity: {spec_b*100:.2f}%\nThreshold: tau = {tau_base:.3f} | N = 579 Participants'
     ),
     (
         cm_m,
-        'Proposed Model: WaveLM + Gated Attention-MIL',
-        f'Balanced Accuracy: {bal_m*100:.2f}% | Sensitivity: {sens_m*100:.2f}% | Specificity: {spec_m*100:.2f}%\nOperating Threshold: tau = {tau_mil:.3f} | N = 579 Test Participants (Delta: +{(bal_m - bal_b)*100:.2f}%)'
+        'Proposed: WavLM + Gated Attention-MIL',
+        f'Balanced Accuracy: {bal_m*100:.2f}%\nSensitivity: {sens_m*100:.2f}% | Specificity: {spec_m*100:.2f}%\nThreshold: tau = {tau_mil:.3f} | N = 579 Participants'
     ),
 ]
 
@@ -128,7 +128,7 @@ for ax, (cm, main_title, subtitle), labels in zip(axes, cms, labels_list):
     im = ax.imshow(cm, cmap='Blues', interpolation='nearest', vmin=0, vmax=400)
     
     # Title & Subtitle
-    ax.set_title(f'{main_title}\n{subtitle}', fontsize=11, fontweight='bold', pad=12)
+    ax.set_title(f'{main_title}\n{subtitle}', fontsize=10.5, fontweight='bold', pad=10)
     
     # Ticks & Labels (Clear, standard clinical labels)
     ax.set_xticks([0, 1])

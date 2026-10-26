@@ -10,11 +10,13 @@
 - [ADR-006: End-to-End wav2vec2 Fine-Tuning with Attention Pooling & SpecAugment](#adr-006-end-to-end-wav2vec2-fine-tuning-with-attention-pooling--specaugment)
 - [ADR-007: Docker-First Containerization for Local GTX 1650 and GridShare Cloud GPU Portability](#adr-007-docker-first-containerization-for-local-gtx-1650-and-gridshare-cloud-gpu-portability)
 - [ADR-008: Pre-Implementation Verification and Documentation Protocol](#adr-008-pre-implementation-verification-and-documentation-protocol)
-- [ADR-009: 8.0-Second Audio Window & 8-Layer Transformer Unfreezing](#adr-009-80-second-audio-window--8-layer-transformer-unfreezing)
+- [ADR-009: 8.0-Second Audio Window & Selective Transformer Unfreezing](#adr-009-80-second-audio-window--selective-transformer-unfreezing)
 - [ADR-010: Count-Invariant Clinical Aggregation & Adherence Confounder Analysis](#adr-010-count-invariant-clinical-aggregation--adherence-confounder-analysis)
-- [ADR-011: WaveLM Base+ as Champion Acoustic Foundation Backbone](#adr-011-wavelm-base-as-champion-acoustic-foundation-backbone)
+- [ADR-011: WavLM Base+ as Champion Acoustic Foundation Backbone](#adr-011-wavlm-base-as-champion-acoustic-foundation-backbone)
 - [ADR-012: Permutation-Invariant Gated Attention Multiple Instance Learning (Attention-MIL)](#adr-012-permutation-invariant-gated-attention-multiple-instance-learning-attention-mil)
 - [ADR-013: Raw Waveform Preservation over Aggressive Digital Filtering](#adr-013-raw-waveform-preservation-over-aggressive-digital-filtering)
+
+> **Reading note (2026-10-25):** ADRs are historical decision records. Some entries reference intermediate scripts, feature caches, or checkpoints that are not retained in the current tree; the authoritative shipped metrics and configuration are in `README.md` and `artifacts/models/deep_learning/wavelm/`.
 
 ---
 
@@ -66,6 +68,7 @@
 - **Findings**:
   - Validation participant balanced accuracy reached **81.24%** (ROC-AUC: 0.8661).
   - One-time evaluation on the held-out test split collapsed to **72.02% accuracy** (ROC-AUC: 0.7884).
+- **Historical note (2026-10-25)**: The Phase 3b openSMILE/eGeMAPS feature artifacts are not retained in the current tree; the 72.02% result is recorded as originally measured and is not reproducible from the checked-in artifacts.
 - **Rationale**: Tabular acoustic features suffer from severe domain shift across unseen participants and phone microphones. Cross-participant generalization cannot exceed ~72% on test data without adaptive representation learning.
 - **Consequences**: Confirmed that the **85% accuracy target** would require end-to-end deep learning (ADR-006). The final held-out test result was **82.54% balanced accuracy** (ADR-012), so the 85% target was **not reached**.
 
@@ -90,21 +93,25 @@
 ### ADR-007: Docker-First Containerization for Local GTX 1650 and GridShare Cloud GPU Portability
 
 - **Status**: Accepted
-- **Context**: The host machine runs Linux with Python 3.14, for which official PyTorch CUDA wheels are unavailable. Furthermore, training may be executed either locally on an NVIDIA GeForce GTX 1650 (4 GB VRAM) or on cloud GPU instances (GridShare / RunPod / Lambda).
-- **Decision**: Package the entire training, validation, and evaluation pipeline inside a portable Docker container based on `pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime`. Provide two execution profiles via `docker-compose.yml` and CLI flags:
-  1. **Local Mode (`local-train`)**:
+- **Context**: The host machine runs Linux with Python 3.14 (current `data/.venv`: torch 2.14.1+cu130). Training may be executed either locally on an NVIDIA GeForce GTX 1650 (4 GB VRAM) or on cloud GPU instances (GridShare / RunPod / Lambda).
+- **Decision**: Package the pipeline in Docker images based on `pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime`:
+  1. **Training image (`Dockerfile`)**: Installs the root requirements and provides a CUDA/PyTorch environment for host- or cloud-launched training. Cloud training is launched by `scripts/train_wavelm_cloud.sh`; Docker-based evaluation is invoked by `scripts/run_docker_evaluate.sh` (it expects a local `parkinsons-detector:latest` image built from the root `Dockerfile`).
+  2. **Inference stack (`docker-compose.yml`)**: Ships `backend-gpu` (profile `gpu`), `backend-cpu` (profile `cpu`), and `frontend`; `scripts/run_docker.sh gpu|cpu` starts the selected backend profile and the frontend.
+  The originally planned `local-train` / `cloud-train` / `evaluate` compose services are **not** present in the current tree.
+- **Initial resource profiles (historical plan, not the shipped compose services)**:
+  1. **Local Mode**:
      - Batch size: 4
      - Gradient accumulation steps: 8 (effective batch size: 32)
      - Mixed precision: PyTorch AMP `fp16`
      - Gradient checkpointing: Enabled
      - Peak VRAM footprint: ~2.8–3.1 GB (comfortably fits in 4 GB VRAM)
-  2. **Cloud Mode (`cloud-train`)**:
+  2. **Cloud Mode**:
      - Batch size: 16–32
      - Gradient accumulation steps: 1–2 (effective batch size: 32)
      - Training time: ~25–35 minutes
-- **Rationale**: Guarantees identical execution environments between local development and cloud training. Zero host Python 3.14 dependency issues. Seamless deployment to GridShare by mounting `data/` and `artifacts/`.
-- **Consequences**: Requires Docker with NVIDIA Container Toolkit (`--gpus all`).
-- **Implementation note (2026-10-18)**: The shipped WaveLM checkpoint (`artifacts/models/deep_learning/wavelm/training_history.json`) used batch size **16**, gradient accumulation **2** (effective 32), `gradient_checkpointing: false`, AMP fp16, and 15 epochs, completing in **1,539 s (~25.7 min)**. The 4×8 local profile above describes the initial plan, not the shipped run.
+- **Rationale**: Guarantees identical execution environments between local development and cloud training and isolates the host Python 3.14 installation from CUDA/PyTorch version drift. Seamless deployment to GridShare by mounting `data/` and `artifacts/`.
+- **Consequences**: Requires Docker with NVIDIA Container Toolkit (`--gpus all`) for GPU containers.
+- **Implementation note (2026-10-18; verified 2026-10-25)**: The shipped WavLM checkpoint (`artifacts/models/deep_learning/wavelm/training_history.json`) used batch size **16**, gradient accumulation **2** (effective 32), `gradient_checkpointing: false`, AMP fp16, and 15 epochs, completing in **1,539 s (~25.7 min)**. The 4×8 local profile above describes the initial plan, not the shipped run.
 
 ---
 
@@ -118,7 +125,7 @@
 
 ---
 
-### ADR-009: 8.0-Second Audio Window & 8-Layer Transformer Unfreezing
+### ADR-009: 8.0-Second Audio Window & Selective Transformer Unfreezing
 
 - **Status**: Accepted
 - **Context**: The initial fine-tuning baseline (ADR-006) achieved 67.5% participant balanced accuracy and 0.720 ROC-AUC using 5.0-second audio windows and freezing the first 6 Transformer layers. Fine vocal tremors (4–7 Hz modulation) and acoustic micro-breaks require longer temporal windows to be disambiguated from natural phonatory breathiness.
@@ -127,36 +134,37 @@
   2. Unfreeze 8 Transformer layers (layers 5–12 unfrozen, layers 1–4 frozen).
   3. Introduce **Mixup waveform augmentation** ($\alpha = 0.2$), speed perturbation (0.9x–1.1x), and multi-chunk time masking (1–3 masks).
 - **Rationale**: 8 seconds captures multiple complete tremor cycles. Unfreezing 8 layers provides sufficient capacity to learn non-linear vocal fold pathology representations while preserving early acoustic feature extraction in layers 1–4.
-- **Consequences**: Elevated model validation balanced accuracy from 70.0% to **80.09%** and ROC-AUC from 0.720 to **0.8665**, completing 20 epochs in 37.5 minutes on NVIDIA RTX 4090.
-- **Implementation note (2026-10-18)**: The shipped WaveLM checkpoint in `artifacts/models/deep_learning/wavelm/` was trained with `num_frozen_layers: 2` — Transformer layers **1–2 frozen and 3–12 trainable (10 unfrozen)** — for **15 epochs** (best epoch 14), not 8 unfrozen layers / 20 epochs. Its `training_history.json` also records `mixup_alpha: 0.0`, `dropout: 0.2`, `label_smoothing: 0.05`, and `pos_weight: 1.35`. The 8-layer/20-epoch/Mixup-0.2 description above records the earlier wav2vec2 configuration, not the deployed model. See `training_history.json` for the authoritative run config.
+- **Consequences**: Elevated model validation balanced accuracy from 70.0% to **80.09%** and ROC-AUC from 0.720 to **0.8665**, completing 20 epochs in 37.5 minutes on a cloud NVIDIA GPU (the specific GPU model is not recorded in the artifact).
+- **Implementation note (2026-10-18)**: The shipped WavLM checkpoint in `artifacts/models/deep_learning/wavelm/` was trained with `num_frozen_layers: 2` — Transformer layers **1–2 frozen and 3–12 trainable (10 unfrozen)** — for **15 epochs** (best epoch 14), not 8 unfrozen layers / 20 epochs. Its `training_history.json` also records `mixup_alpha: 0.0`, `dropout: 0.2`, `label_smoothing: 0.05`, and `pos_weight: 1.35`. The 8-layer/20-epoch/Mixup-0.2 description above records the earlier wav2vec2 configuration, not the deployed model. See `training_history.json` for the authoritative run config.
 
 ---
 
 ### ADR-010: Count-Invariant Clinical Aggregation & Adherence Confounder Analysis
 
 - **Status**: Refactored (Supersedes Multi-Moment Meta-Classifier)
-- **Context**: In clinical evaluation, simple arithmetic mean aggregation across participant recordings produced a **74.72%** balanced accuracy (**0.8245 ROC-AUC**) on the Wav2Vec 2.0 baseline, while Top-2 medication-aware aggregation achieved **81.83%** (**0.8985 ROC-AUC**). Multi-moment distribution features (`mean`, `max`, `min`, `top-2`, `std dev`, `count`) were explored to mitigate diurnal medication "ON" state symptom masking.
+- **Context**: In clinical evaluation, simple arithmetic mean aggregation across participant recordings produced a **74.72%** balanced accuracy (**0.8245 ROC-AUC**) on the Wav2Vec 2.0 baseline, while Top-2 aggregation achieved **81.83%** (**0.8985 ROC-AUC**) at τ ≈ 0.429 on the checked-in wav2vec2 predictions. Multi-moment distribution features (`mean`, `max`, `min`, `top-2`, `std dev`, `count`) were explored to mitigate diurnal medication "ON" state symptom masking.
 - **Audit Findings**: Empirical verification revealed a major study-protocol confounder in the mPower dataset: Parkinson's participants submitted significantly more recordings than controls due to medication-tracking protocols (5.04 vs 1.72 mean takes; 100% of participants with $\ge 3$ takes in the dataset are PD). Consequently, order statistics (`max`, `min`, `std`) over variable takes inadvertently captured app usage adherence (AUC 0.897 on count alone). When evaluated on count-controlled cohorts (fixed $K=2$ takes), the meta-classifier provided zero gain over simple probability averaging.
 - **Decision**: Standardize production patient-level inference to **Count-Invariant Probability Averaging** ($\bar{P} = \frac{1}{N}\sum P_i$) anchored at the validation-calibrated decision threshold ($\tau = 0.360$) and stratified into a 3-tier clinical triage scale:
   - **Low Risk ($\bar{P} < 0.25$)**: Normal voice dynamics.
   - **Borderline Screening Alert ($0.25 \le \bar{P} < 0.36$)**: Sensitivity-optimized gate for mild dysphonia or suspected medication "ON-state" masking.
   - **High Risk ($\bar{P} \ge 0.36$)**: High-confidence manifest vocal tremor; specialist neurological referral.
   Statistical moments (diurnal variance $\sigma$, peak top-2) are retained in the UI as descriptive clinical session telemetry rather than automated decision weights.
-- **Consequences**: Guarantees zero data leakage and complete invariance to the number of recordings submitted. Anchors the system strictly to genuine acoustic dysphonic biomarkers (**80.09% Validation Balanced Accuracy, 0.8665 ROC-AUC; 74.72% Held-Out Test Balanced Accuracy, 0.8245 ROC-AUC; 81.83% Top-2 Balanced Accuracy, 0.8985 ROC-AUC**).
-- **Production note (2026-10-18)**: The deployed WaveLM + Attention-MIL pipeline uses $\tau = 0.300$, $\tau_{\text{rec}} = 0.310$, and triage cutoffs 0.20 / 0.30. The 0.360 threshold and 0.25/0.36 triage bands above describe the earlier wav2vec2 count-invariance stage and are retained for history.
+- **Consequences**: Guarantees zero data leakage and complete invariance to the number of recordings submitted. Anchors the system strictly to genuine acoustic dysphonic biomarkers (**80.09% Validation Balanced Accuracy, 0.8665 ROC-AUC; 74.72% Held-Out Test Balanced Accuracy, 0.8245 ROC-AUC; 81.83% Top-2 Balanced Accuracy at τ ≈ 0.429, 0.8985 ROC-AUC**).
+- **Production note (2026-10-18; verified 2026-10-25)**: The deployed WavLM + Attention-MIL pipeline uses $\tau = 0.300$, $\tau_{\text{rec}} = 0.310$, and triage cutoffs 0.20 / 0.30. The 0.360 threshold and 0.25/0.36 triage bands above describe the earlier wav2vec2 count-invariance stage and are retained for history. The Top-2 figures are reproducible from `artifacts/models/deep_learning/wav2vec2/test_predictions.csv` at τ ≈ 0.429; production no longer uses Top-2 aggregation.
 
 ---
 
-### ADR-011: WaveLM Base+ as Champion Acoustic Foundation Backbone
+### ADR-011: WavLM Base+ as Champion Acoustic Foundation Backbone
 
 - **Status**: Accepted
-- **Context**: While `facebook/wav2vec2-base` achieved 74.72% held-out test balanced accuracy (ADR-006/009), real-world mobile voice screening requires superior resistance to ambient background noise and room reflections. Microsoft's `microsoft/wavlm-base-plus` was pretrained on 94,000 hours of noisy/overlapped speech using masked speech denoising and gated relative position bias.
+- **Context**: While `facebook/wav2vec2-base` achieved 74.72% held-out test balanced accuracy (ADR-006/009), real-world mobile voice screening requires superior resistance to ambient background noise and room reflections. Microsoft's `microsoft/wavlm-base-plus` was pretrained on 94,000 hours of diverse speech (60k Libri-Light, 10k GigaSpeech, 24k VoxPopuli), using masked speech denoising with simulated noisy/overlapped inputs and gated relative position bias.
 - **Decision**: Select fine-tuned `microsoft/wavlm-base-plus` (`artifacts/models/deep_learning/wavelm`) as the primary champion backbone, unfreezing **10 transformer layers (layers 3–12; layers 1–2 frozen)** with temporal attention pooling and 8.0s windowing.
 - **Findings**:
   - Elevated held-out test participant balanced accuracy to **79.11%** (arithmetic mean baseline) and ROC-AUC to **0.8585** on 579 unseen test participants.
   - Substantially reduced false alarms on healthy controls while boosting true positive sensitivity compared to earlier wav2vec2 baselines.
   - Delivered comparable performance to competitive multi-model ensembles without incurring triple VRAM overhead (the ensemble gain was only on the order of +0.003 ROC-AUC).
-- **Consequences**: Standardizes production single-model inference to WaveLM Base+.
+  - **Historical note (2026-10-25)**: The multi-model ensemble comparison was recorded in an earlier run; the ensemble artifacts are not retained, so the +0.003 ROC-AUC delta is not reproducible from the current tree.
+- **Consequences**: Standardizes production single-model inference to WavLM Base+.
 
 ---
 
@@ -164,7 +172,7 @@
 
 - **Status**: Accepted
 - **Context**: In clinical evaluation, arithmetic mean averaging over multiple takes suffered from false alarms caused by breath exhaustion at the tail of recordings or transient noise. Multi-model ensembling was tested but provided negligible gain (+0.0027 ROC-AUC) while tripling compute costs. Order statistics (`max`, `min`) violate clinical count-invariance (ADR-010).
-- **Decision**: Implement a lightweight 2-layer Gated Attention Multiple Instance Learning head (Ilse et al., ICML 2018) operating on multi-crop embeddings extracted from the frozen WaveLM backbone:
+- **Decision**: Implement a lightweight Gated Attention Multiple Instance Learning head (one attention layer plus a 2-layer classifier; Ilse et al., ICML 2018) operating on multi-crop embeddings extracted from the fine-tuned WavLM backbone, which is frozen while the MIL head is trained:
   $$a_i = \frac{\mathbf{w}^T (\tanh(\mathbf{V} \mathbf{h}_i) \odot \sigma(\mathbf{U} \mathbf{h}_i))}{\sqrt{L}}, \quad \alpha_i = \text{softmax}(a_i), \quad \mathbf{h}_{\text{bag}} = \sum_{i=1}^N \alpha_i \mathbf{h}_i$$
 - **Findings**:
   - Elevated held-out test balanced accuracy to **82.54% [95% CI: 79.0%, 86.1%]** (+3.44% gain over 79.11% arithmetic mean).
@@ -185,5 +193,5 @@
 - **Findings**:
   - Human vocal fundamental frequency ($F_0$) in sustained `/aaa/` spans 85 Hz to 220 Hz (with low-pitched elderly male phonation at 85–120 Hz).
   - High-pass filtering at mid frequencies cuts into fundamental voice pitch and pathological vocal micro-tremors.
-  - Deep pretrained speech models like WaveLM Base+ were pretrained on 94,000 hours of noisy audio and naturally tolerate acoustic variations without artificial filtering.
+  - Deep pretrained speech models like WavLM Base+ were pretrained on 94,000 hours of diverse speech, including simulated noisy/overlapped inputs, and naturally tolerate acoustic variations without artificial filtering.
 - **Consequences**: Audio is fed to the model in its raw standardized 16 kHz format, preventing acoustic distortion.

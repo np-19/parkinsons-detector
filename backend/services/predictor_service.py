@@ -58,7 +58,7 @@ class PredictorService:
             return
 
         logger.info(
-            "Initializing PatientPredictor (WaveLM champion model, MIL=%s, device=%s)...",
+            "Initializing PatientPredictor (WavLM champion model, MIL=%s, device=%s)...",
             USE_ATTENTION_MIL,
             self.device,
         )
@@ -133,7 +133,7 @@ class PredictorService:
 
             score = raw_result["meta_classifier_score"]
             screening_cutoff = raw_result.get("screening_cutoff", 0.200)
-            diagnostic_cutoff = raw_result.get("diagnostic_cutoff", 0.500)
+            diagnostic_cutoff = raw_result.get("diagnostic_cutoff", 0.400)
             balanced_cutoff = raw_result.get("meta_threshold", 0.300)
 
             triage_level = raw_result.get("triage_level", "LOW_RISK")
@@ -185,7 +185,7 @@ class PredictorService:
         screening_cutoff = max(0.15, threshold - 0.10)
         diagnostic_cutoff = min(0.85, threshold + 0.10)
         is_mil = bool(predictor and getattr(predictor, "mil_model", None) is not None)
-        model_ver = "WaveLM + Gated Attention-MIL (mPower)" if is_mil else "WaveLM (mPower)"
+        model_ver = "WavLM + Gated Attention-MIL (mPower)" if is_mil else "WavLM (mPower)"
         agg_name = "gated_attention_mil" if is_mil else "arithmetic_mean"
         return MetaStatsResponse(
             threshold=round(threshold, 3),

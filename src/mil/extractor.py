@@ -1,4 +1,4 @@
-"""High-Performance Batch Feature & Embedding Extractor using WaveLM Backbone.
+"""High-Performance Batch Feature & Embedding Extractor using WavLM Backbone.
 
 Runs batched multi-crop extraction on the local NVIDIA GeForce GTX 1650
 with PyTorch AMP FP16 and num_workers=0 (to avoid IPC stalls on Linux/Python 3.14).
@@ -124,7 +124,7 @@ def extract_participant_bags(
     duration: float = 8.0,
     sample_rate: int = 16000,
 ) -> Dict:
-    """Extract WaveLM embeddings and group into participant bags."""
+    """Extract WavLM embeddings and group into participant bags."""
     print(f"\n=======================================================")
     print(f" Extracting Participant Bags from {metadata_csv.name}")
     print(f" Target Device: {device} (Batch size: {batch_size} recs = {batch_size * num_crops} crops)")
@@ -133,7 +133,7 @@ def extract_participant_bags(
     df = pd.read_csv(metadata_csv)
     print(f"Loaded {len(df)} metadata rows across {df['healthCode'].nunique()} participants.")
 
-    # Load WaveLM backbone
+    # Load WavLM backbone
     print(f"Loading checkpoint: {model_path}")
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     cfg = checkpoint.get("config", {})
@@ -257,7 +257,7 @@ def extract_participant_bags(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Extract WaveLM embeddings into participant bags")
+    parser = argparse.ArgumentParser(description="Extract WavLM embeddings into participant bags")
     parser.add_argument("--metadata", type=str, default=None, help="Path to metadata CSV (train.csv, validation.csv, test.csv)")
     parser.add_argument("--output-path", type=str, default=None, help="Explicit destination file for participant bags (.pt)")
     parser.add_argument("--test-metadata", type=str, default="data/metadata/test.csv")

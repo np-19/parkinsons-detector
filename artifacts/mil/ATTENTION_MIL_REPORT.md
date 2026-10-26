@@ -8,7 +8,7 @@
 
 ## 1. Head-to-Head Performance Comparison
 
-| Metric | WaveLM Baseline (Arithmetic Mean) | Gated Attention-MIL (Adaptive Pooling) | Absolute Change ($\Delta$) |
+| Metric | WavLM Baseline (Arithmetic Mean) | Gated Attention-MIL (Adaptive Pooling) | Absolute Change ($\Delta$) |
 | :--- | :---: | :---: | :---: |
 | **Balanced Accuracy** | **79.11%** (CI not reported) | **82.54%** [79.0%, 86.1%] | **+3.44%** |
 | **ROC-AUC** | **0.8585** (CI not reported) | **0.8791** [0.845, 0.912] | **+0.0206** |

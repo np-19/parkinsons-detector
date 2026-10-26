@@ -142,7 +142,7 @@ export const DiagnosticCard: React.FC<DiagnosticCardProps> = ({ report, onReset 
               {/* Zone 2: Amber */}
               <div style={{ width: `${zone2Width}%` }} className="h-full bg-amber-300/90" title={`Borderline Screening Alert Zone (${screeningCutoff.toFixed(2)}–${balancedCutoff.toFixed(2)})`} />
               {/* Zone 3: Red */}
-              <div style={{ width: `${zone3Width}%` }} className="h-full bg-rose-300/80" title={`High Risk Zone (≥${diagnosticCutoff.toFixed(2)})`} />
+              <div style={{ width: `${zone3Width}%` }} className="h-full bg-rose-300/80" title={`High Risk Zone (≥${balancedCutoff.toFixed(2)})`} />
             </div>
 
             {/* Needle Pin / Marker for Patient Score */}

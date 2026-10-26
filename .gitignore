@@ -36,10 +36,18 @@ __pycache__/
 *.ckpt
 *.safetensors
 *.bin
-!artifacts/mil/mil_head.pt
 !artifacts/models/deep_learning/wavelm/mil_head.pt
+
+# Local caches (Hugging Face model cache)
+.cache/
 
 # Local logs and temporary files
 *.log
 *.tmp
 *.part
+
+# Presentation decks and OS noise (not part of the code deliverable)
+*.pptx
+*.odp
+*.key
+.DS_Store

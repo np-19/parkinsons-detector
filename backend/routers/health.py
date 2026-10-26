@@ -15,9 +15,9 @@ def get_health() -> HealthResponse:
     service = PredictorService.get_instance()
     is_mil = bool(service.predictor and getattr(service.predictor, "mil_model", None) is not None)
     model_ver = (
-        "WaveLM + Gated Attention-MIL (mPower)"
+        "WavLM + Gated Attention-MIL (mPower)"
         if is_mil
-        else "WaveLM (mPower)"
+        else "WavLM (mPower)"
     )
     return HealthResponse(
         status="healthy",

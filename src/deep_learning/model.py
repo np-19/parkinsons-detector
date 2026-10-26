@@ -1,12 +1,19 @@
-"""PyTorch Neural Network architecture for speech-based Parkinson's detection.
+"""PyTorch neural network architectures for speech-based Parkinson's detection.
 
-Features:
-- Pretrained Wav2Vec2 backbone (facebook/wav2vec2-base)
-- Frozen 7-layer CNN feature encoder
-- Selectively frozen lower Transformer layers (layers 1-6)
-- Fine-tuned upper Transformer layers (layers 7-12)
-- Learnable temporal attention pooling
-- Multi-layer classification head with LayerNorm, Dropout, and GELU
+Supports two self-supervised speech backbones:
+
+- ``Wav2Vec2ForParkinsons``: ``facebook/wav2vec2-base`` (baseline).
+- ``WaveLMForParkinsons``: ``microsoft/wavlm-base-plus`` (shipped production backbone).
+
+Naming: the official Microsoft model is **WavLM**; the class name and artifact
+directory retain the historical ``WaveLM`` / ``wavelm`` spelling for compatibility.
+
+Shared design:
+- Frozen 7-layer CNN feature encoder.
+- Selectively frozen lower Transformer layers; the shipped WavLM checkpoint
+  freezes layers 1-2 and fine-tunes layers 3-12 (10 of 12).
+- Learnable temporal attention pooling.
+- Multi-layer classification head with LayerNorm, Dropout, and GELU.
 """
 
 from typing import Dict, Optional, Tuple, Union
@@ -214,12 +221,13 @@ class Wav2Vec2ForParkinsons(nn.Module):
 
 
 class WaveLMForParkinsons(nn.Module):
-    """Fine-tuned WaveLM model for Parkinson's disease classification.
+    """Fine-tuned WavLM model for Parkinson's disease classification.
 
-    WaveLM (e.g. microsoft/wavelm-base-plus) was pretrained on 60,000 hours of
-    speech with masked speech denoising and restoration. Its suitability for
-    fine-grained Parkinson's acoustic markers is a hypothesis to be evaluated
-    against the validated Wav2Vec2 baseline, not an established advantage.
+    WavLM (``microsoft/wavlm-base-plus``) was pretrained on 94,000 hours of
+    diverse speech (Libri-Light, GigaSpeech, VoxPopuli) with masked speech
+    denoising and prediction. The fine-tuned model is the shipped production
+    backbone (ADR-011), selected over the Wav2Vec2 baseline for its stronger
+    held-out test performance.
     """
 
     def __init__(
@@ -277,7 +285,7 @@ class WaveLMForParkinsons(nn.Module):
                     for param in layer.parameters():
                         param.requires_grad = True
 
-        hidden_dim = self.config.hidden_size  # 768 for wavelm-base / wavelm-base-plus
+        hidden_dim = self.config.hidden_size  # 768 for wavlm-base / wavlm-base-plus
 
         # Temporal attention pooling
         self.pool = TemporalAttentionPooling(hidden_dim=hidden_dim, attention_dim=128)
@@ -304,7 +312,7 @@ class WaveLMForParkinsons(nn.Module):
         labels: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
-        """Forward pass for WaveLM."""
+        """Forward pass for WavLM."""
         outputs = self.wavelm(
             input_values=input_values,
             attention_mask=attention_mask,

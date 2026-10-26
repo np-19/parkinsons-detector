@@ -13,8 +13,8 @@ The system was evaluated on the held-out test split of the **mPower Mobile Parki
 | Tier | Architecture | Aggregation Method | Balanced Accuracy | Raw Accuracy | ROC-AUC | Sensitivity | Specificity | Description |
 | :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | **0** | **Wav2Vec 2.0 Base** | Arithmetic Mean ($\tau = 0.360$) | **74.72%** | 73.06% | 0.8245 | 78.08% | 71.36% | Baseline speech representation model. |
-| **1** | **WaveLM Base+** | Arithmetic Mean ($\tau = 0.310$) | **79.11%** | 79.27% | **0.8585** | 78.77% | 79.45% | Masked speech denoising foundation backbone. |
-| **2** | **WaveLM Base+** | **Attention-MIL ($\tau = 0.300$)** | **`82.54%`** | **`82.04%`** | **`0.8791`** | **`83.56%`** | **`81.52%`** | **Production Pipeline**: Gated attention bag pooling with zero test leakage. |
+| **1** | **WavLM Base+** | Arithmetic Mean ($\tau = 0.310$) | **79.11%** | 79.27% | **0.8585** | 78.77% | 79.45% | Masked speech denoising foundation backbone. |
+| **2** | **WavLM Base+** | **Attention-MIL ($\tau = 0.300$)** | **`82.54%`** | **`82.04%`** | **`0.8791`** | **`83.56%`** | **`81.52%`** | **Production Pipeline**: Gated attention bag pooling with zero test leakage. |
 
 ---
 
@@ -75,7 +75,7 @@ Providing **2 to 3 takes** recorded a few moments apart helps the Attention-MIL 
 Run inference on one or more WAV recordings using [`src/deep_learning/predict_patient.py`](../src/deep_learning/predict_patient.py):
 
 ```bash
-# Evaluate a participant with multiple recordings using WaveLM + Attention-MIL
+# Evaluate a participant with multiple recordings using WavLM + Attention-MIL
 python3 src/deep_learning/predict_patient.py \
   data/processed_audio/test/PD/100009.wav \
   data/processed_audio/test/PD/100136.wav
@@ -113,7 +113,7 @@ python3 src/deep_learning/predict_patient.py \
 =================================================================
 ```
 
-> These values are the actual output for these two held-out test takes (recorded on 2026-10-21). Exact scores depend on the input audio. `HIGH_RISK` starts at the participant threshold (0.300); the `Diagnostic: ≥0.400` text is the confidence marker.
+> These values are the actual output for these two held-out test takes (generated on 2026-10-21). Exact scores depend on the input audio. `HIGH_RISK` starts at the participant threshold (0.300); the `Diagnostic: ≥0.400` text is the confidence marker.
 
 For JSON output:
 ```bash
@@ -156,7 +156,7 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
 ### POST `/api/v1/predict`
-Accepts one or more audio files (`.wav`, `.mp3`, `.mpeg`, `.ogg`, `.m4a`, `.aac`, `.flac`, `.webm`) via multipart form data (`files`).
+Accepts one or more audio files (`.wav`, `.mp3`, `.mpeg`, `.mpg`, `.ogg`, `.m4a`, `.aac`, `.flac`, `.webm`) via multipart form data (`files`).
 
 **Sample JSON Response** (abridged actual response for the two takes above):
 ```json
@@ -215,6 +215,6 @@ Returns system decision metadata and operating thresholds:
   "diagnostic_cutoff": 0.40,
   "aggregation": "gated_attention_mil",
   "score_field": "participant_mean_score",
-  "model_version": "WaveLM + Gated Attention-MIL (mPower)"
+  "model_version": "WavLM + Gated Attention-MIL (mPower)"
 }
 ```

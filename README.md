@@ -5,9 +5,11 @@
 [![HuggingFace Transformers](https://img.shields.io/badge/%F0%9F%A4%97-Transformers-yellow)](https://huggingface.co/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A deep learning minor project for detecting Parkinson's Disease from sustained vowel audio recordings (`/aaa/`). Built on a fine-tuned **Microsoft WaveLM Base+** speech foundation model combined with **Gated Attention Multiple Instance Learning (Attention-MIL)** pooling. 
+A deep learning minor project for detecting Parkinson's Disease from sustained vowel audio recordings (`/aaa/`). Built on a fine-tuned **Microsoft WavLM Base+** speech foundation model combined with **Gated Attention Multiple Instance Learning (Attention-MIL)** pooling.
 
 Evaluated with **100% strict participant-level separation** (zero participant overlap between training, validation, and test splits).
+
+> **Naming note:** The official Microsoft model is **WavLM**. Some internal identifiers (the `WaveLMForParkinsons` class, the `artifacts/.../wavelm/` directory, and `wavelm` variables) retain the historical spelling for compatibility; user-facing documentation uses WavLM.
 
 ---
 
@@ -18,21 +20,21 @@ Evaluated on **579 unseen test participants** (146 Parkinson's, 433 Healthy Cont
 | Model Architecture | Pooling Method | Balanced Accuracy | Raw Accuracy | Sensitivity | Specificity | ROC-AUC | Optimal Cutoff ($\tau$) |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Wav2Vec 2.0 Base** | Arithmetic Mean | 74.72% | 73.06% | 78.08% | 71.36% | 0.8245 | 0.360 |
-| **WaveLM Base+** | Arithmetic Mean (Baseline) | 79.11% | 79.27% | 78.77% | 79.45% | 0.8585 | 0.310 |
-| **WaveLM Base+ (Proposed)** | **Gated Attention-MIL** | **`82.54%`** | **`82.04%`** | **`83.56%`** | **`81.52%`** | **`0.8791`** | **`0.300`** |
+| **WavLM Base+** | Arithmetic Mean (Baseline) | 79.11% | 79.27% | 78.77% | 79.45% | 0.8585 | 0.310 |
+| **WavLM Base+ (Proposed)** | **Gated Attention-MIL** | **`82.54%`** | **`82.04%`** | **`83.56%`** | **`81.52%`** | **`0.8791`** | **`0.300`** |
 
 * **Held-Out Test Balanced Accuracy**: **`82.54%`** (95% Bootstrap CI: `[79.0%, 86.1%]`, Operating Cutoff $\tau = 0.300$, Recording Cutoff $\tau_{\text{rec}} = 0.310$)
 * **Parkinson's Detection Sensitivity**: **`83.56%`** (122 / 146 PD participants correctly detected)
 * **Healthy Control Specificity**: **`81.52%`** (353 / 433 healthy controls correctly cleared)
 * **Test ROC-AUC**: **`0.8791`** (95% CI: `[0.845, 0.912]`)
-* **Single Model Efficiency**: Fine-tuned WaveLM Base+ (~90M backbone parameters, frozen during MIL inference). Informal timing on the local GTX 1650 was roughly 1–2 s per recording; the repository does not include a formal latency benchmark.
+* **Single Model Efficiency**: Fine-tuned WavLM Base+ (~94.7M total parameters: 94.4M backbone + 0.3M head; the backbone is frozen while the Attention-MIL head is trained). Informal timing on the local GTX 1650 was roughly 1–2 s per recording; the repository does not include a formal latency benchmark.
 
 ---
 
 ## Evaluation Figures
 
 ### 1. ROC Curve
-Shows model discrimination on the 579 test participants. WaveLM + Gated Attention-MIL operates at **83.56% Sensitivity** and **81.52% Specificity** ($\tau = 0.300$, AUC = 0.8791).
+Shows model discrimination on the 579 test participants. WavLM + Gated Attention-MIL operates at **83.56% Sensitivity** and **81.52% Specificity** ($\tau = 0.300$, AUC = 0.8791).
 
 ![Receiver Operating Characteristic (ROC) Curve](docs/figures/roc_curves.png)
 
@@ -78,8 +80,8 @@ Distribution of model probabilities for Healthy Controls vs. Parkinson's partici
                   │
                   ▼ Tensor of Crops (3, 128000)
 ┌─────────────────────────────────────────────────────────────┐
-│  Stage 3: Fine-Tuned WaveLM Feature Backbone (~90M Params)  │
-│  - Microsoft WaveLM Base+ (Pretrained on 94k hrs of speech) │
+│  Stage 3: Fine-Tuned WavLM Feature Backbone (~94M Params)   │
+│  - Microsoft WavLM Base+ (94k hrs diverse speech)           │
 │  - 7-Layer CNN Feature Encoder (Frozen)                     │
 │  - Shipped checkpoint: Transformer layers 1–2 frozen        │
 │  - Transformer layers 3–12 fine-tuned (10 of 12 trainable)  │
@@ -99,7 +101,7 @@ Distribution of model probabilities for Healthy Controls vs. Parkinson's partici
                   ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Stage 5: Output Verdict & Score                            │
-│  - Predicted Class: POSITIVE (Parkinson's) or NEGATIVE      │
+│  - Class: POSITIVE (Acoustic Dysphonia) or NEGATIVE         │
 │  - Confidence Level & Per-Recording Attention Breakdown     │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -157,7 +159,7 @@ pip install -r backend/requirements.txt
 
 > **PyTorch is not pinned in the root `requirements.txt`.** Install `torch` and `torchaudio` with a build that matches your CUDA driver (or use the Docker images, which include them). The project was developed against torch 2.14 / CUDA 13.0 locally and the Docker images use `pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime`.
 >
-> **Model weights and audio are not stored in Git.** `best_model.pt` (~944 MB) is excluded by `.gitignore`, and `data/processed_audio/` (about 3.1 GB locally) is not tracked. Place the checkpoint at `artifacts/models/deep_learning/wavelm/best_model.pt` and the dataset under `data/processed_audio/` before running the examples below. Only the small `mil_head.pt` files and evaluation artifacts are tracked.
+> **Model weights and audio are not stored in Git.** `best_model.pt` (~944 MB) is excluded by `.gitignore`, and `data/processed_audio/` (about 3.1 GB locally) is not tracked. Place the checkpoint at `artifacts/models/deep_learning/wavelm/best_model.pt` and the dataset under `data/processed_audio/` before running the examples below. Only the small `mil_head.pt` checkpoint and evaluation artifacts are tracked.
 
 
 ### 2. Predict a Patient's Voice (CLI)
@@ -225,10 +227,10 @@ python3 -m pytest tests/
 
 ## Project Documentation
 
-* **[Viva & Defense Guide](docs/PRESENTATION_AND_DEFENSE_GUIDE.md)**: Frequently asked viva/evaluator questions with simple, direct answers.
-* **[User Guide](docs/CLINICAL_AND_USER_GUIDE.md)**: Operating steps, recording guidelines, and Python API usage.
+* **[User Guide](docs/CLINICAL_AND_USER_GUIDE.md)**: Operating steps, recording guidelines, API usage, and triage thresholds.
 * **[Architecture Decisions Record (ADR)](docs/DECISIONS.md)**: Log of technical design decisions (ADR-001 through ADR-013).
 * **[Changelog](docs/CHANGELOG.md)**: Project version history.
+* **[Attention-MIL Evaluation Report](artifacts/mil/ATTENTION_MIL_REPORT.md)**: Held-out test comparison, error breakdown, and attention-weight analysis.
 
 ---
 

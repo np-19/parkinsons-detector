@@ -125,13 +125,9 @@ def main() -> None:
     # Load Gated Attention-MIL head if available
     mil_path = Path(args.mil_path) if args.mil_path else (model_dir / "mil_head.pt")
     if not mil_path.exists():
-        for candidate in [
-            Path("artifacts/models/deep_learning/wavelm/mil_head.pt"),
-            Path("artifacts/mil/mil_head.pt"),
-        ]:
-            if candidate.exists():
-                mil_path = candidate
-                break
+        candidate = Path("artifacts/models/deep_learning/wavelm/mil_head.pt")
+        if candidate.exists():
+            mil_path = candidate
 
     mil_model = None
     mil_threshold = 0.300

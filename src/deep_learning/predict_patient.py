@@ -1,7 +1,7 @@
 """Patient-level Parkinson's detection inference pipeline.
 
 Takes one or more sustained vowel audio recordings for a patient, loads the
-fine-tuned WaveLM Base+ checkpoint, extracts three crops per take, and applies
+fine-tuned WavLM Base+ checkpoint, extracts three crops per take, and applies
 Gated Attention-MIL pooling with a 50:50 blend and consensus guardrail. Returns
 a participant-level clinical screening triage result.
 """
@@ -45,7 +45,7 @@ WAVELM_RECORDING_THRESHOLD = 0.310
 MIL_PARTICIPANT_THRESHOLD = 0.300
 ACOUSTIC_OPTIMAL_THRESHOLD = WAVELM_RECORDING_THRESHOLD
 SCREENING_CUTOFF = 0.200
-DIAGNOSTIC_CUTOFF = 0.500
+DIAGNOSTIC_CUTOFF = 0.400  # High-confidence marker (checkpoint threshold + 0.10)
 
 # Backward-compatibility reference exports for API endpoints
 META_WEIGHTS = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -56,7 +56,7 @@ META_THRESHOLD = MIL_PARTICIPANT_THRESHOLD
 
 
 class PatientPredictor:
-    """End-to-end patient inference pipeline powered by WaveLM + Gated Attention-MIL."""
+    """End-to-end patient inference pipeline powered by WavLM + Gated Attention-MIL."""
 
     def __init__(
         self,
@@ -110,7 +110,7 @@ class PatientPredictor:
         self.sample_rate = int(cfg.get("sample_rate", sample_rate) or sample_rate)
         self.target_length = int(self.duration * self.sample_rate)
 
-        # Calibrate recording-level threshold (WaveLM acoustic backbone)
+        # Calibrate recording-level threshold (WavLM acoustic backbone)
         self.recording_threshold = (
             recording_threshold
             if recording_threshold is not None
@@ -426,12 +426,12 @@ def main():
     parser.add_argument(
         "--model-path",
         default=DEFAULT_WAVELM_PATH,
-        help="Model checkpoint path (default: WaveLM champion model)",
+        help="Model checkpoint path (default: WavLM champion model)",
     )
     parser.add_argument(
         "--mil-path",
         default=DEFAULT_MIL_PATH,
-        help="Gated Attention-MIL head path (default: WaveLM mil_head.pt)",
+        help="Gated Attention-MIL head path (default: WavLM mil_head.pt)",
     )
     parser.add_argument(
         "--threshold",

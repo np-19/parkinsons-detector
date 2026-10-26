@@ -37,7 +37,7 @@ class StatisticalDistribution(BaseModel):
 
 class PredictionResponse(BaseModel):
     """Comprehensive patient-level clinical acoustic screening report."""
-    diagnosis: str = Field(..., description="'NEGATIVE (Normal Phonation Dynamics)', 'BORDERLINE (Mild Dysphonia)', or 'POSITIVE (Parkinsonian Dysphonia)'")
+    diagnosis: str = Field(..., description="'NEGATIVE (Normal Phonation Dynamics)', 'BORDERLINE (Mild Acoustic Dysphonia)', or 'POSITIVE (Acoustic Dysphonia Detected)'")
     is_pd: bool = Field(..., description="Boolean flag: True if positive/borderline screening alert, False if negative")
     triage_level: str = Field(default="LOW_RISK", description="'LOW_RISK', 'BORDERLINE', or 'HIGH_RISK'")
     triage_recommendation: str = Field(default="", description="Actionable clinical next steps and follow-up guidance")
@@ -61,9 +61,9 @@ class PredictionResponse(BaseModel):
             "(the 50:50 Attention-MIL production blended score)."
         ),
     )
-    threshold: float = Field(default=0.30, description="Balanced diagnostic cutoff threshold")
+    threshold: float = Field(default=0.30, description="Participant-level balanced decision threshold")
     screening_cutoff: float = Field(default=0.20, description="Screening triage cutoff derived from the checkpoint threshold")
-    diagnostic_cutoff: float = Field(default=0.40, description="Diagnostic triage cutoff derived from the checkpoint threshold")
+    diagnostic_cutoff: float = Field(default=0.40, description="High-confidence marker derived from the checkpoint threshold; not a triage boundary")
     recordings_analyzed: int = Field(..., description="Count of recordings analyzed")
     distribution: StatisticalDistribution = Field(..., description="Statistical distribution metrics")
     recordings: List[RecordingResult] = Field(..., description="Breakdown of each recording evaluated")
@@ -81,10 +81,10 @@ class MetaStatsResponse(BaseModel):
     """Threshold and aggregation configuration used by patient inference."""
     threshold: float = 0.30
     screening_cutoff: float = 0.20
-    diagnostic_cutoff: float = 0.50
+    diagnostic_cutoff: float = 0.40
     aggregation: str = "gated_attention_mil"
     score_field: str = "participant_mean_score"
-    model_version: str = "WaveLM + Gated Attention-MIL (mPower)"
+    model_version: str = "WavLM + Gated Attention-MIL (mPower)"
     # Deprecated compatibility fields retained for existing API consumers.
     weights: List[float] = Field(default_factory=list)
     reference_means: List[float] = Field(default_factory=list)
@@ -96,7 +96,7 @@ class HealthResponse(BaseModel):
     """Healthcheck and runtime environment status."""
     status: str = "healthy"
     model_loaded: bool
-    model_version: str = "WaveLM + Gated Attention-MIL (mPower)"
+    model_version: str = "WavLM + Gated Attention-MIL (mPower)"
     device: str
     torch_version: str
     supported_formats: List[str]

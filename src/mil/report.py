@@ -46,7 +46,7 @@ def generate_mil_summary_report(
         test_m = rep.get("test_metrics", {})
         mil = test_m
         mil.setdefault("threshold", rep.get("optimal_threshold", 0.300))
-        # Load baseline metrics from WaveLM test evaluation report if available
+        # Load baseline metrics from WavLM test evaluation report if available
         wavelm_rep_p = eval_report_path.parent.parent / "models" / "deep_learning" / "wavelm" / "test_evaluation_report.json"
         if wavelm_rep_p.exists():
             with open(wavelm_rep_p) as f_w:
@@ -131,7 +131,7 @@ def generate_mil_summary_report(
 
 ## 1. Head-to-Head Performance Comparison
 
-| Metric | WaveLM Baseline (Arithmetic Mean) | Gated Attention-MIL (Adaptive Pooling) | Absolute Change ($\Delta$) |
+| Metric | WavLM Baseline (Arithmetic Mean) | Gated Attention-MIL (Adaptive Pooling) | Absolute Change ($\Delta$) |
 | :--- | :---: | :---: | :---: |
 | **Balanced Accuracy** | **{base['balanced_accuracy']*100:.2f}%** {pct_ci(base, 'balanced_accuracy_ci')} | **{mil['balanced_accuracy']*100:.2f}%** {pct_ci(mil, 'balanced_accuracy_ci')} | **{diff['balanced_accuracy_diff']*100:+.2f}%** |
 | **ROC-AUC** | **{base['roc_auc']:.4f}** {auc_ci(base, 'roc_auc_ci')} | **{mil['roc_auc']:.4f}** {auc_ci(mil, 'roc_auc_ci')} | **{diff['roc_auc_diff']:+.4f}** |

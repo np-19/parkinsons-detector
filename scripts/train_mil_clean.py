@@ -215,7 +215,8 @@ def train_mil_on_train_and_val(
 
     # Export clean weights and reports
     output_dir.mkdir(parents=True, exist_ok=True)
-    mil_export_path = output_dir / "mil_head.pt"
+    mil_export_path = Path("artifacts/models/deep_learning/wavelm/mil_head.pt")
+    mil_export_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save({
         "model_state_dict": model.state_dict(),
         "config": {
@@ -252,18 +253,6 @@ def train_mil_on_train_and_val(
             "optimal_threshold": operating_threshold,
             "recording_threshold": recording_threshold,
         }, f, indent=2)
-
-    # Copy to deep learning folder for serving
-    wavelm_mil_path = Path("artifacts/models/deep_learning/wavelm/mil_head.pt")
-    if wavelm_mil_path.parent.exists():
-        torch.save({
-            "model_state_dict": model.state_dict(),
-            "config": {"in_dim": 768, "attention_dim": 128, "hidden_dim": 128, "dropout": dropout, "use_residual_mean": False},
-            "optimal_threshold": operating_threshold,
-            "recording_threshold": recording_threshold,
-            "val_metrics": val_metrics,
-            "test_metrics": test_metrics,
-        }, wavelm_mil_path)
 
     print(f"\nSuccessfully saved clean mil_head.pt to {mil_export_path}")
     print(f"Saved evaluation metrics to {output_dir / 'mil_evaluation_report.json'}")

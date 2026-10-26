@@ -12,8 +12,8 @@ def main():
     models_dir = Path("artifacts/models/deep_learning")
     benchmark_targets = [
         ("wav2vec2", "Wav2Vec2 Base", False),
-        ("wavelm", "WaveLM Base+", False),
-        ("wavelm", "WaveLM + MIL", True),
+        ("wavelm", "WavLM Base+", False),
+        ("wavelm", "WavLM + MIL", True),
     ]
 
     print("\n" + "=" * 90)

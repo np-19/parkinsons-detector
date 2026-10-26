@@ -4,7 +4,7 @@
 # Uses the project virtual environment (data/.venv)
 #
 # Usage:
-#   ./scripts/run_evaluate_local.sh                                       # Defaults to WaveLM champion model
+#   ./scripts/run_evaluate_local.sh                                       # Defaults to WavLM champion model
 #   ./scripts/run_evaluate_local.sh artifacts/models/deep_learning/wavelm # Explicit model directory
 #   ./scripts/run_evaluate_local.sh <model_dir> <num_crops> <duration>
 # ==============================================================================
@@ -24,7 +24,7 @@ fi
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
     echo "Usage: $0 [model_dir] [num_crops] [duration] [batch_size]"
-    echo "  $0                                       # Default: WaveLM champion model on local GPU"
+    echo "  $0                                       # Default: WavLM champion model on local GPU"
     echo "  $0 artifacts/models/deep_learning/wavelm # Explicit model directory"
     echo "  $0 artifacts/models/deep_learning/wav2vec2"
     exit 0

@@ -36,7 +36,7 @@ def _validate_file(file: UploadFile) -> str:
     summary="Evaluate One or More Patient Voice Recordings",
     description=(
         "Upload one or more audio files (sustained vowel 'aaah'). Evaluates each file using the fine-tuned "
-        "Microsoft WaveLM Base+ acoustic model with 3-crop multi-crop embedding extraction and Gated "
+        "Microsoft WavLM Base+ acoustic model with 3-crop multi-crop embedding extraction and Gated "
         "Attention-MIL aggregation with 50:50 blend and clinical consensus guardrail to produce the "
         "final participant-level screening triage."
     ),

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# NeuroVocal: WaveLM Training & Evaluation Runner for Cloud GPUs (24 GB VRAM)
+# NeuroVocal: WavLM Training & Evaluation Runner for Cloud GPUs (24 GB VRAM)
 # Fully compatible with:
 #   • NVIDIA GeForce RTX 3090 (24 GB) - (~50-60 min runtime)
 #   • NVIDIA GeForce RTX 4090 (24 GB) - (~30-35 min runtime)
@@ -71,11 +71,11 @@ fi
 OUTPUT_DIR="${1:-artifacts/models/deep_learning/wavelm}"
 mkdir -p "$OUTPUT_DIR"
 
-# --- 6. Launch WaveLM Fine-Tuning ---
+# --- 6. Launch WavLM Fine-Tuning ---
 echo -e "\n======================================================================"
-echo " STAGE 1: Fine-Tuning WaveLM (microsoft/wavelm-base-plus) on mPower"
+echo " STAGE 1: Fine-Tuning WavLM (microsoft/wavlm-base-plus) on mPower"
 echo " Configuration:"
-echo "   - Backbone        : microsoft/wavelm-base-plus (Pretrained on 94,000h speech)"
+echo "   - Backbone        : microsoft/wavlm-base-plus (Pretrained on 94,000h diverse speech)"
 echo "   - Window Duration : 8.0 seconds (128,000 samples @ 16 kHz)"
 echo "   - Batch Size      : 16 (Gradient Acc: 2 -> Effective Batch Size: 32)"
 echo "   - Trainable Layers: Transformer Layers 5-12 (Layers 1-4 frozen, CNN frozen)"
@@ -107,7 +107,7 @@ python3 -m src.deep_learning.train \
 
 # --- 7. Evaluate on Held-Out Test Split ---
 echo -e "\n======================================================================"
-echo " STAGE 2: Evaluating WaveLM on Held-Out Test Split (579 Participants)"
+echo " STAGE 2: Evaluating WavLM on Held-Out Test Split (579 Participants)"
 echo "======================================================================"
 
 python3 -m src.deep_learning.evaluate \
